@@ -2,8 +2,16 @@
 #include <opencv2/highgui/highgui.hpp>
 #include "opencv2/imgproc/imgproc.hpp"
 #include <iostream>
+#include <boost/graph/adjacency_list.hpp>
+#include <boost/unordered_map.hpp>
+#include <boost/graph/connected_components.hpp>
+#include <algorithm>
+#include <set>
+#include <iterator>
+
 
 #define PI 3.14159265
+
 
 class Capsule{
     public:
@@ -29,11 +37,8 @@ std::vector<std::vector<Point> > swt(cv::Mat edges, cv::Mat grad_x, cv::Mat grad
     float distance = 0.05;
     std::vector<std::vector<Point> > rays;
     for(int row = 0; row < edges.size().height; row++){
-        uchar* imageData = edges.data;
-        const uchar* ptr = (const uchar*)(imageData + row * edges.step);
         for(int col = 0; col < edges.size().width; col++){
-            if(*ptr > 0){
-//            if(edges.at<uchar>(row, col) > 0){
+            if(edges.at<uchar>(row, col) > 0){
                 std::vector<Point> ray;
                 cv::Point p;
                 Capsule position;
@@ -98,10 +103,95 @@ std::vector<std::vector<Point> > swt(cv::Mat edges, cv::Mat grad_x, cv::Mat grad
                     }
                 }
             }
-            ptr++;
         }
     }
     return rays;
+}
+
+bool PointSort(const Point &lhs, const Point &rhs){
+    return lhs.length < rhs.length;
+}
+
+void medianFilter(cv::Mat swt, std::vector<std::vector<Point> > rays){
+    for(int i = 0; i < rays.size(); i++){
+        std::sort(rays[i].begin(), rays[i].end(), &PointSort);
+        float median = (rays[i][rays[i].size()/2]).length;
+        for(int q = 0; q < rays[i].size(); q++){
+            swt.at<float>(rays[i][q].p.y, rays[i][q].p.x) = std::min(rays[i][q].length, median);
+        }
+    }
+}
+
+//Connceted Component algorithm
+std::vector<std::vector<cv::Point > > cca(cv::Mat swt){
+    float ratio = 1000.0;
+    int vertices = 0;
+    boost::unordered_map<int, int> map;
+    boost::unordered_map<int, cv::Point> revmap;
+
+    for(int row = 0; row < swt.size().height; row++){
+        for(int col = 0; col < swt.size().width; col++){
+            if(swt.at<float>(row, col) > 0.0){
+                map[row * swt.size().width + col] = vertices;
+                std::cout << row * swt.size().width << ", " << col << std::endl;
+                cv::Point p(col, row);
+                revmap[vertices] = p;
+                vertices ++;
+            }
+        }
+    }
+    boost::adjacency_list<boost::vecS, boost::vecS, boost::undirectedS> g(vertices);
+
+    int count = 0;
+    std::cout << "\n\n\n\n\n\n" << std::endl;
+    for(int row = 0; row < swt.size().height; row++){
+        for(int col = 0; col < swt.size().width; col++){
+            float mag = swt.at<float>(row, col);
+//            std::cout << row << "/" << swt.size().height << ", " << col << "/" << swt.size().width << ", " << mag << "\n";
+            if(mag > 0){
+                std::vector<cv::Point> neighbours{
+                    cv::Point(row + 1, col),
+                    cv::Point(row + 1, col - 1),
+                    cv::Point(row + 1, col + 1),
+                    cv::Point(row, col + 1)
+                };
+                int pos = map.at(row * swt.size().width + col);
+                for(int i = 0; i < neighbours.size(); i++){
+                    cv::Point neighbour = neighbours[i];
+//                    std::cout << row << ", " << col << "  :::  " << neighbour.x << ", " << neighbour.y << "  :  " << swt.size().width << ", " << swt.size().height << std::endl;
+                    if (neighbour.x < 0 || neighbour.y < 0 || neighbour.x >= swt.size().height || neighbour.y >= swt.size().width){
+                        continue;
+                    }
+                    float mag2 = swt.at<float>(neighbour.x, neighbour.y);
+//                    std::cout << "Mags: " << mag << ", " << mag2 << "\n";
+                    if(mag2 > 0.0 && (mag / mag2 <= ratio || mag2 / mag <= ratio)){
+//                        std::cout << neighbour.x * swt.size().width << ", " << neighbour.y;
+//                        std::cout << "   ::::    " << map.at(row * swt.size().width + col) << ", " << map.at(neighbour.x * swt.size().width + neighbour.y);
+//                        std::cout << "                        " << row << "/" << swt.size().height << ", " << col << "/" << swt.size().width << "\n";
+                        boost::add_edge(pos, map.at(neighbour.x * swt.size().width + neighbour.y), g);
+                        count ++;
+                    }
+                }
+            }
+        }
+    }
+
+
+    std::vector<int> component (boost::num_vertices (g));
+    size_t num_components = boost::connected_components (g, &component[0]);
+
+    std::vector<std::vector<cv::Point > > comps;
+    for(int q = 0; q < num_components; q++){
+        std::vector<cv::Point> tmpV;
+        for (size_t i = 0; i < boost::num_vertices (g); ++i)
+            if (component[i] == q){
+                tmpV.push_back(revmap[i]);
+            }
+        comps.push_back(tmpV);
+    }
+    std::cout << comps.size() << std::endl;
+
+    return comps;
 }
 
 int main( int argc, char** argv )
@@ -158,7 +248,16 @@ int main( int argc, char** argv )
                     swt.at<float>(tmp.p) = tmp.length;
                 }
             }
+            cv::Mat componentsMat = frame.clone();
             cv::imshow("SWT", swt);
+            medianFilter(swt, rays);
+            std::vector<std::vector<cv::Point> > components = cca(swt);
+            for(int i = 0; i < components.size(); i++){
+                cv::Rect rect = cv::boundingRect(components[i]);
+                cv::rectangle(componentsMat, rect, cv::Scalar(0, 255, 255));
+            }
+            cv::imshow("SWTMedian", swt);
+            cv::imshow("Components", componentsMat);
 
             cv::waitKey(0);
         }

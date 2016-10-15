@@ -188,6 +188,7 @@ std::vector<std::vector<cv::Point > > cca(cv::Mat swt){
                     }
                     float mag2 = swt.at<float>(neighbour.x, neighbour.y);
 //                    std::cout << "Mags: " << mag << ", " << mag2 << "\n";
+                    //TODO: Find out if && or || is better, it seems like it depends
                     if(mag2 > 0.0 && (mag / mag2 <= ratio && mag2 / mag <= ratio)){
 //                        std::cout << neighbour.x * swt.size().width << ", " << neighbour.y;
 //                        std::cout << "   ::::    " << map.at(row * swt.size().width + col) << ", " << map.at(neighbour.x * swt.size().width + neighbour.y);
@@ -260,7 +261,7 @@ std::vector<Component> filterComponents(cv::Mat swt, std::vector<std::vector<cv:
 //        if (variance > 0.5 * mean)
 //            continue;
 
-        if(rect.width < 8 || rect.height < 8)
+        if(rect.width < 4 || rect.height < 8)
             continue;
 
         if(rect.width / rect.height > 10 || rect.height / rect.width > 10)
@@ -280,7 +281,7 @@ std::vector<ComponentCluster> chain(cv::Mat swt, std::vector<Component> &compone
     float colorThresh = 100;
     float strokeThresh = PI/2;
     float widthThresh = 2.5;
-    float heightThresh = 2.5;
+    float heightThresh = 1.5;
     float distanceThresh = 3;
     int minLengthOfCluster = 1;
     std::vector<ComponentCluster> clusters;
@@ -316,8 +317,8 @@ std::vector<ComponentCluster> chain(cv::Mat swt, std::vector<Component> &compone
                 > strokeThresh)
                 continue;
 
-            if( (float)cp.rect.height / (float)cp2.rect.height > heightThresh ||
-                (float)cp2.rect.height / (float)cp.rect.height > heightThresh)
+            std::cout << std::max((float)cp.rect.height / (float)cp2.rect.height, (float)cp2.rect.height / (float)cp.rect.height) << "\n";
+            if( std::max((float)cp.rect.height / (float)cp2.rect.height, (float)cp2.rect.height / (float)cp.rect.height) > heightThresh)
                 continue;
             if( (float)cp.rect.width / (float)cp2.rect.width > widthThresh ||
                 (float)cp2.rect.width / (float)cp.rect.width > widthThresh)

@@ -8,8 +8,15 @@
 #include <algorithm>
 #include <set>
 #include <iterator>
+#include <chrono>
 
 #define PI 3.14159265
+long int ms(){
+    std::chrono::seconds sec(1);
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch()
+    ).count();
+}
 
 class Component{
     public:
@@ -20,23 +27,31 @@ class Component{
         bool merged = false;
         cv::Point rectCenter;
         float averageDistanceFromCenter;
-        int clusterID;
+        int clusterID = -1;
 };
-class ComponentCluster{
+typedef std::vector<Component> ComponentCluster;
+/*class ComponentCluster{
     public:
-        std::vector<Component> cluster;
+        std::vector<Component*> cluster;
         void add(Component &cp){
-            this -> cluster.push_back(cp);
+            std::cout << "Add size before: " << this -> cluster.size() << std::endl;
+            this -> cluster.push_back(&cp);
+            std::cout << "Add size after: " << this -> cluster.size() << std::endl;
             cp.merged = true;
         };
         void merge(ComponentCluster &cluster, int clusterID){
+            std::cout << "Sent Cluster ID: " << clusterID << std::endl;
             for(int i = 0; i < cluster.cluster.size(); i++){
-                this -> add(cluster.cluster[i]);
-                cluster.cluster[i].clusterID = clusterID;
+                Component &tmpCP = *cluster.cluster[i];
+                this -> add(tmpCP);
+                std::cout << "Before HERE221312oiu3o213iou12iou3: " << tmpCP.clusterID << std::endl;
+                tmpCP.clusterID = clusterID;
+                std::cout << "After value HERE221312oiu3o213iou12iou3: " << tmpCP.clusterID << std::endl;
+//                std::cout << "After cluster HERE221312oiu3o213iou12iou3: " << cluster.cluster[i].clusterID << std::endl;
             }
         }
 };
-
+*/
 class Capsule{
     public:
         float x;
@@ -148,11 +163,14 @@ void medianFilter(cv::Mat swt, std::vector<std::vector<Point> > rays){
 
 //Connceted Component algorithm
 std::vector<std::vector<cv::Point > > cca(cv::Mat swt){
+    long int start = ms();
     float ratio = 3.0;
     int vertices = 0;
     boost::unordered_map<int, int> map;
     boost::unordered_map<int, cv::Point> revmap;
 
+    std::cout << "Setup: " << ms() - start << std::endl;
+    start = ms();
     for(int row = 0; row < swt.size().height; row++){
         for(int col = 0; col < swt.size().width; col++){
             if(swt.at<float>(row, col) > 0.0){
@@ -165,6 +183,8 @@ std::vector<std::vector<cv::Point > > cca(cv::Mat swt){
         }
     }
     boost::adjacency_list<boost::vecS, boost::vecS, boost::undirectedS> g(vertices);
+    std::cout << "Graph setup: " << ms() - start << std::endl;
+    start = ms();
 
     int count = 0;
 //    std::cout << "\n\n\n\n\n\n" << std::endl;
@@ -200,22 +220,19 @@ std::vector<std::vector<cv::Point > > cca(cv::Mat swt){
             }
         }
     }
+    std::cout << "Main loop: " << ms() - start << std::endl;
+    start = ms();
 
 
     std::vector<int> component (boost::num_vertices (g));
     size_t num_components = boost::connected_components (g, &component[0]);
 
-    std::vector<std::vector<cv::Point > > comps;
-    for(int q = 0; q < num_components; q++){
-        std::vector<cv::Point> tmpV;
-        for (size_t i = 0; i < boost::num_vertices (g); ++i){
-            if (component[i] == q){
-                tmpV.push_back(revmap[i]);
-            }
-        }
-        comps.push_back(tmpV);
+    std::vector<std::vector<cv::Point > > comps(num_components);
+    for (size_t i = 0; i < boost::num_vertices (g); ++i){
+        comps[component[i]].push_back(revmap[i]);
     }
-//    std::cout << comps.size() << std::endl;
+    std::cout << "Connected components: " << ms() - start << std::endl;
+    start = ms();
 
     return comps;
 }
@@ -277,15 +294,20 @@ std::vector<Component> filterComponents(cv::Mat swt, std::vector<std::vector<cv:
     return validComponents;
 }
 
-std::vector<ComponentCluster> chain(cv::Mat swt, std::vector<Component> &components2, cv::Mat frame){
+std::vector<std::vector<Component> > chain(cv::Mat swt, std::vector<Component> &components2, cv::Mat frame){
     float colorThresh = 100;
     float strokeThresh = PI/2;
     float widthThresh = 2.5;
     float heightThresh = 1.5;
     float distanceThresh = 3;
     int minLengthOfCluster = 1;
-    std::vector<ComponentCluster> clusters;
+//    std::vector<ComponentCluster> clusters;
     std::vector<Component> components = std::vector<Component>(components2.begin(), components2.end());
+    std::vector<int> clusterIndexes;
+    for(int i = 0; i < components.size(); i++)
+        clusterIndexes.push_back(-1);
+
+    std::vector<std::vector<int>> clusters;
     for(int i = 0; i < components.size(); i++){
         Component &cp = components[i];
         cv::Mat roi = frame(cp.rect);
@@ -298,6 +320,8 @@ std::vector<ComponentCluster> chain(cv::Mat swt, std::vector<Component> &compone
             if(i == j)
                 continue;
             Component &cp2 = components[j];
+//            std::cout << "Main id: " << clusterIndexes[i] << std::endl;
+//            std::cout << "Second Main id: " << clusterIndexes[j] << std::endl;
             cv::Mat roi2 = frame(cp2.rect);
             cv::Mat1b mask2(roi2.rows, roi2.cols);
 
@@ -317,7 +341,7 @@ std::vector<ComponentCluster> chain(cv::Mat swt, std::vector<Component> &compone
                 > strokeThresh)
                 continue;
 
-            std::cout << std::max((float)cp.rect.height / (float)cp2.rect.height, (float)cp2.rect.height / (float)cp.rect.height) << "\n";
+//            std::cout << std::max((float)cp.rect.height / (float)cp2.rect.height, (float)cp2.rect.height / (float)cp.rect.height) << "\n";
             if( std::max((float)cp.rect.height / (float)cp2.rect.height, (float)cp2.rect.height / (float)cp.rect.height) > heightThresh)
                 continue;
             if( (float)cp.rect.width / (float)cp2.rect.width > widthThresh ||
@@ -337,54 +361,58 @@ std::vector<ComponentCluster> chain(cv::Mat swt, std::vector<Component> &compone
                 > distanceThresh)
                 continue;
 
-//            std::cout << "Ind: " << i << ", " << j <<  "  :  " "Merged: " << cp.merged << ", " << cp2.merged << "  Cluster size: " << clusters.size() << std::endl;
             if(!cp.merged && !cp2.merged){
-                ComponentCluster cluster;
-                cluster.add(cp);
-                cluster.add(cp2);
+                std::vector<int> cluster;
+                cluster.push_back(i);
+                cluster.push_back(j);
                 clusters.push_back(cluster);
-                cp.clusterID = clusters.size() - 1;
-                cp2.clusterID = clusters.size() - 1;
-//                std::cout << ", " << "Neither" << std::endl;
+                clusterIndexes[i] = clusters.size() - 1;
+                clusterIndexes[j] = clusters.size() - 1;
+                cp.merged = true;
+                cp2.merged = true;
             }else if(cp.merged && cp2.merged){
-//                std::cout << ", " << "Both" << std::endl;
-                if(cp.clusterID == cp2.clusterID){
+                if(clusterIndexes[i] == clusterIndexes[j] && clusterIndexes[j] != -1){
                     //TODO:This if should probably be at the beginning of the for loop
                     //Alot of unnecessary calculation
 //                    std::cout << std::endl;
                     continue;
                 }else{
-                    ComponentCluster &cluster = clusters[cp.clusterID];
-                    ComponentCluster &cluster2 = clusters[cp2.clusterID];
-                    cluster.merge(cluster2, cp2.clusterID);
-                    clusters.erase(clusters.begin() + cp2.clusterID);
+                    clusters[clusterIndexes[i]].insert(clusters[clusterIndexes[i]].end(), clusters[clusterIndexes[j]].begin(), clusters[clusterIndexes[j]].end());
+                    int tmp = clusterIndexes[j];
+                    for(int q = 0; q < clusters[clusterIndexes[j]].size(); q++){
+                        clusterIndexes[clusters[clusterIndexes[j]][q]] = clusterIndexes[i];
+                    }
+                    clusters[tmp].empty();
+                    cp.merged = true;
+                    cp2.merged = true;
                 }
             }else if(cp.merged){
-//                std::cout << "First , " << clusters[cp.clusterID].cluster.size() << std::endl;
-                ComponentCluster &cluster = clusters[cp.clusterID];
-                cluster.add(cp2);
-                cp2.clusterID = cp.clusterID;
-//                std::cout << cp.merged << ", " << cp2.merged << std::endl;
+                clusters[clusterIndexes[i]].push_back(j);
+                clusterIndexes[j] = clusterIndexes[i];
+                cp.merged = true;
             }else if(cp2.merged){
-//                std::cout << ",    Second, " << clusters.size() << ", " << std::endl;
-                ComponentCluster &cluster = clusters[cp2.clusterID];
-                cluster.add(cp);
-                cp.clusterID = cp2.clusterID;
+                clusters[clusterIndexes[j]].push_back(i);
+                clusterIndexes[i] = clusterIndexes[j];
+                cp2.merged = true;
             }
         }
         if(!cp.merged){
-            ComponentCluster cluster;
-            cluster.add(cp);
+            std::vector<int> cluster;
+            cluster.push_back(i);
             clusters.push_back(cluster);
-            cp.clusterID = clusters.size() - 1;
+            clusterIndexes[i] = clusters.size() - 1;
         }
     }
 //    std::cout << "Cluster size: " << clusters.size() << std::endl;
-    std::vector<ComponentCluster> finalClusters;
+    std::vector<std::vector<Component> > finalClusters;
     for(int i = 0; i < clusters.size(); i++){
-//        std::cout << "Length of cluster " << i << ": " << clusters[i].cluster.size() << std::endl;
-        if(clusters[i].cluster.size() > minLengthOfCluster){
-            finalClusters.push_back(clusters[i]);
+//        std::cout << "Length of cluster " << i << ": " << clusters[i].size() << std::endl;
+        if(clusters[i].size() > minLengthOfCluster){
+            std::vector<Component> tmp;
+            for(int q = 0; q < clusters[i].size(); q++){
+                tmp.push_back(components[clusters[i][q]]);
+            }
+            finalClusters.push_back(tmp);
         }
     }
 
@@ -427,13 +455,19 @@ int main( int argc, char** argv )
             cv::Scharr(gaussian, grad_x, CV_32F, 1, 0);
             cv::Scharr(gaussian, grad_y, CV_32F, 0, 1);
 
+/*
             cv::imshow("IMG", frame);
             cv::imshow("GA", gaussian);
             cv::imshow("Edges", edges);
             cv::imshow("grad_x", grad_x);
             cv::imshow("grad_y", grad_y);
+*/
 
+            std::cout << "Starting" << "\n";
+            long int start = ms();
             std::vector<std::vector<Point> > rays = swt(edges, grad_x, grad_y);
+            std::cout << "SWT: " << ms() - start << "\n";
+            start = ms();
 //            std::cout << "Length of rays: " << rays.size() << "\n";
 //            exit(0);
             cv::Mat1f swt(edges.size());
@@ -449,11 +483,25 @@ int main( int argc, char** argv )
             cv::Mat componentsMat = frame.clone();
             cv::Mat validComponentsMat = frame.clone();
             cv::Mat finalClusterMat = frame.clone();
-            cv::imshow("SWT", swt);
+//            cv::imshow("SWT", swt);
+            std::cout << "After SWT: " << ms() - start << "\n";
+            start = ms();
             medianFilter(swt, rays);
+
+            std::cout << "Median: " << ms() - start << "\n";
+            start = ms();
+
             std::vector<std::vector<cv::Point> > components = cca(swt);
+            std::cout << "CCA: " << ms() - start << "\n";
+            start = ms();
+
             std::vector<Component> validComponents = filterComponents(swt, components);
-            std::vector<ComponentCluster> clusters = chain(swt, validComponents, frame);
+            std::cout << "Filter: " << ms() - start << "\n";
+            start = ms();
+
+            std::vector<std::vector<Component> > clusters = chain(swt, validComponents, frame);
+            std::cout << "Chain: " << ms() - start << "\n";
+            start = ms();
 
             for(int i = 0; i < components.size(); i++){
                 cv::Rect rect = cv::boundingRect(components[i]);
@@ -464,8 +512,8 @@ int main( int argc, char** argv )
             }
             for(int i = 0; i < clusters.size(); i++){
                 cv::Scalar color = cv::Scalar(rand() % (155) + 100, rand() % 155 + 100, rand() % 155 + 100);
-                for(int q = 0; q < clusters[i].cluster.size(); q++){
-                    cv::rectangle(finalClusterMat, clusters[i].cluster[q].rect, color, 2);
+                for(int q = 0; q < clusters[i].size(); q++){
+                    cv::rectangle(finalClusterMat, clusters[i][q].rect, color, 2);
                 }
             }
             cv::imshow("SWTMedian", swt);
@@ -473,7 +521,7 @@ int main( int argc, char** argv )
             cv::imshow("ValidComponents", validComponentsMat);
             cv::imshow("Final chars", finalClusterMat);
 
-            cv::waitKey(0);
+//            cv::waitKey(0);
         }
     }
     return 0;

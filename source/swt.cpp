@@ -372,22 +372,15 @@ std::vector<std::vector<Component> > chain(cv::Mat swt, std::vector<Component> &
                 clusterIndexes[j] = clusters.size() - 1;
                 cp.merged = true;
                 cp2.merged = true;
-            }else if(cp.merged && cp2.merged){
-                if(clusterIndexes[i] == clusterIndexes[j] && clusterIndexes[j] != -1){
-                    //TODO:This if should probably be at the beginning of the for loop
-                    //Alot of unnecessary calculation
-//                    std::cout << std::endl;
-                    continue;
-                }else{
-                    clusters[clusterIndexes[i]].insert(clusters[clusterIndexes[i]].end(), clusters[clusterIndexes[j]].begin(), clusters[clusterIndexes[j]].end());
-                    int tmp = clusterIndexes[j];
-                    for(int q = 0; q < clusters[clusterIndexes[j]].size(); q++){
-                        clusterIndexes[clusters[clusterIndexes[j]][q]] = clusterIndexes[i];
-                    }
-                    clusters[tmp].empty();
-                    cp.merged = true;
-                    cp2.merged = true;
+            }else if(cp.merged && cp2.merged){            
+                clusters[clusterIndexes[i]].insert(clusters[clusterIndexes[i]].end(), clusters[clusterIndexes[j]].begin(), clusters[clusterIndexes[j]].end());
+                int tmp = clusterIndexes[j];
+                for(int q = 0; q < clusters[clusterIndexes[j]].size(); q++){
+                    clusterIndexes[clusters[clusterIndexes[j]][q]] = clusterIndexes[i];
                 }
+                clusters[tmp].empty();
+                cp.merged = true;
+                cp2.merged = true;
             }else if(cp.merged){
                 clusters[clusterIndexes[i]].push_back(j);
                 clusterIndexes[j] = clusterIndexes[i];

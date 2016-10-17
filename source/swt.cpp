@@ -24,7 +24,6 @@ class Component{
         cv::Scalar colorMean;
         cv::Rect rect;
         float meanStrokeWidth;
-        bool merged = false;
         cv::Point rectCenter;
         float averageDistanceFromCenter;
         int clusterID = -1;
@@ -37,7 +36,6 @@ typedef std::vector<Component> ComponentCluster;
             std::cout << "Add size before: " << this -> cluster.size() << std::endl;
             this -> cluster.push_back(&cp);
             std::cout << "Add size after: " << this -> cluster.size() << std::endl;
-            cp.merged = true;
         };
         void merge(ComponentCluster &cluster, int clusterID){
             std::cout << "Sent Cluster ID: " << clusterID << std::endl;
@@ -314,15 +312,19 @@ std::vector<std::vector<Component> > chain(cv::Mat swt, std::vector<Component> &
         cv::Mat1b mask(roi.rows, roi.cols);
 
         cv::Scalar colorMean = cv::mean(roi, mask);
+        int &C1ClusterIndex = clusterIndexes[i];
 //        std::cout << cp.rect.x << ", " << colorMean << "\n";
 
         //TODO: Why can we not set this to i + 1?
         for(int j = 0; j < components.size(); j++){
             if(i == j)
                 continue;
+
+            int &C2ClusterIndex = clusterIndexes[j];
             Component &cp2 = components[j];
-//            std::cout << i << ", " << j << ", " << clusterIndexes[i] << ", " << clusterIndexes[j] << ", " << (clusterIndexes[i] == clusterIndexes[j] && clusterIndexes[j] != -1) << std::endl;
-            if(clusterIndexes[i] == clusterIndexes[j] && !(!cp.merged && !cp2.merged) && clusterIndexes[j] != -1 && clusterIndexes[i] != -1)
+
+//            std::cout << i << ", " << j << ", " << C1ClusterIndex << ", " << C2ClusterIndex << ", " << (C1ClusterIndex == C2ClusterIndex && C2ClusterIndex != -1) << std::endl;
+            if(C1ClusterIndex == C2ClusterIndex && C2ClusterIndex != -1 && C1ClusterIndex != -1)
                 continue;
 
             cv::Mat roi2 = frame(cp2.rect);
@@ -356,46 +358,41 @@ std::vector<std::vector<Component> > chain(cv::Mat swt, std::vector<Component> &
             std::cout << std::max(cp.averageDistanceFromCenter, cp2.averageDistanceFromCenter) * 3 << ", ";
             std::cout << (abs(cp.rectCenter.x - cp2.rectCenter.x + cp.rectCenter.y - cp.rectCenter.y)-cp.averageDistanceFromCenter-cp2.averageDistanceFromCenter > std::max(cp.averageDistanceFromCenter, cp2.averageDistanceFromCenter) * 3) << std::endl;
 */
-            if(
-                abs(cp.rectCenter.x - cp2.rectCenter.x + cp.rectCenter.y - cp.rectCenter.y) -
+            if( abs(cp.rectCenter.x - cp2.rectCenter.x + cp.rectCenter.y - cp.rectCenter.y) -
                 cp.averageDistanceFromCenter -
                 cp2.averageDistanceFromCenter
                 > distanceThresh)
                 continue;
 
-            if(!cp.merged && !cp2.merged){
+            if(C1ClusterIndex == -1 && C2ClusterIndex == -1){
                 std::vector<int> cluster;
                 cluster.push_back(i);
                 cluster.push_back(j);
                 clusters.push_back(cluster);
-                clusterIndexes[i] = clusters.size() - 1;
-                clusterIndexes[j] = clusters.size() - 1;
-                cp.merged = true;
-                cp2.merged = true;
-            }else if(cp.merged && cp2.merged){            
-                clusters[clusterIndexes[i]].insert(clusters[clusterIndexes[i]].end(), clusters[clusterIndexes[j]].begin(), clusters[clusterIndexes[j]].end());
-                int tmp = clusterIndexes[j];
-                for(int q = 0; q < clusters[clusterIndexes[j]].size(); q++){
-                    clusterIndexes[clusters[clusterIndexes[j]][q]] = clusterIndexes[i];
+                C1ClusterIndex = clusters.size() - 1;
+                C2ClusterIndex = clusters.size() - 1;
+//                C1ClusterIndex = clusterIndexes[i]
+//                C2ClusterIndex = clusterIndexes[j];
+            }else if(C1ClusterIndex != -1 && C2ClusterIndex != -1){
+                clusters[C1ClusterIndex].insert(clusters[C1ClusterIndex].end(), clusters[C2ClusterIndex].begin(), clusters[C2ClusterIndex].end());
+                int tmp = C2ClusterIndex;
+                for(int q = 0; q < clusters[C2ClusterIndex].size(); q++){
+                    clusterIndexes[clusters[C2ClusterIndex][q]] = C1ClusterIndex;
                 }
                 clusters[tmp].empty();
-                cp.merged = true;
-                cp2.merged = true;
-            }else if(cp.merged){
-                clusters[clusterIndexes[i]].push_back(j);
-                clusterIndexes[j] = clusterIndexes[i];
-                cp.merged = true;
-            }else if(cp2.merged){
-                clusters[clusterIndexes[j]].push_back(i);
-                clusterIndexes[i] = clusterIndexes[j];
-                cp2.merged = true;
+            }else if(C1ClusterIndex != -1){
+                clusters[C1ClusterIndex].push_back(j);
+                C2ClusterIndex = C1ClusterIndex;
+            }else if(C2ClusterIndex != -1){
+                clusters[C2ClusterIndex].push_back(i);
+                C1ClusterIndex = C2ClusterIndex;
             }
         }
-        if(!cp.merged){
+        if(C1ClusterIndex == -1){
             std::vector<int> cluster;
             cluster.push_back(i);
             clusters.push_back(cluster);
-            clusterIndexes[i] = clusters.size() - 1;
+            C1ClusterIndex = clusters.size() - 1;
         }
     }
 //    std::cout << "Cluster size: " << clusters.size() << std::endl;
@@ -511,10 +508,14 @@ int main( int argc, char** argv )
                     cv::rectangle(finalClusterMat, clusters[i][q].rect, color, 2);
                 }
             }
-            cv::imshow("SWTMedian", swt);
+/*            cv::imshow("SWTMedian", swt);
             cv::imshow("Components", componentsMat);
             cv::imshow("ValidComponents", validComponentsMat);
             cv::imshow("Final chars", finalClusterMat);
+*/
+            cv::Mat finalClusterMatSmall;
+            cv::resize(finalClusterMat, finalClusterMatSmall, cv::Size(1280, 720));
+            cv::imshow("Final chars small", finalClusterMatSmall);
 
             cv::waitKey(0);
         }

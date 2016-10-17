@@ -316,12 +316,15 @@ std::vector<std::vector<Component> > chain(cv::Mat swt, std::vector<Component> &
         cv::Scalar colorMean = cv::mean(roi, mask);
 //        std::cout << cp.rect.x << ", " << colorMean << "\n";
 
+        //TODO: Why can we not set this to i + 1?
         for(int j = 0; j < components.size(); j++){
             if(i == j)
                 continue;
             Component &cp2 = components[j];
-//            std::cout << "Main id: " << clusterIndexes[i] << std::endl;
-//            std::cout << "Second Main id: " << clusterIndexes[j] << std::endl;
+//            std::cout << i << ", " << j << ", " << clusterIndexes[i] << ", " << clusterIndexes[j] << ", " << (clusterIndexes[i] == clusterIndexes[j] && clusterIndexes[j] != -1) << std::endl;
+            if(clusterIndexes[i] == clusterIndexes[j] && !(!cp.merged && !cp2.merged) && clusterIndexes[j] != -1 && clusterIndexes[i] != -1)
+                continue;
+
             cv::Mat roi2 = frame(cp2.rect);
             cv::Mat1b mask2(roi2.rows, roi2.cols);
 
@@ -344,8 +347,7 @@ std::vector<std::vector<Component> > chain(cv::Mat swt, std::vector<Component> &
 //            std::cout << std::max((float)cp.rect.height / (float)cp2.rect.height, (float)cp2.rect.height / (float)cp.rect.height) << "\n";
             if( std::max((float)cp.rect.height / (float)cp2.rect.height, (float)cp2.rect.height / (float)cp.rect.height) > heightThresh)
                 continue;
-            if( (float)cp.rect.width / (float)cp2.rect.width > widthThresh ||
-                (float)cp2.rect.width / (float)cp.rect.width > widthThresh)
+            if( std::max((float)cp.rect.width / (float)cp2.rect.width, (float)cp2.rect.width / (float)cp.rect.width) > widthThresh)
                 continue;
 /*
             std::cout << abs(cp.rectCenter.x - cp2.rectCenter.x + cp.rectCenter.y - cp.rectCenter.y) << ", ";
@@ -416,7 +418,7 @@ std::vector<std::vector<Component> > chain(cv::Mat swt, std::vector<Component> &
         }
     }
 
-//    std::cout << "Final number of clusters: " << finalClusters.size() << std::endl;
+    std::cout << "Final number of clusters: " << finalClusters.size() << std::endl;
     return finalClusters;
 }
 
@@ -521,7 +523,7 @@ int main( int argc, char** argv )
             cv::imshow("ValidComponents", validComponentsMat);
             cv::imshow("Final chars", finalClusterMat);
 
-//            cv::waitKey(0);
+            cv::waitKey(0);
         }
     }
     return 0;

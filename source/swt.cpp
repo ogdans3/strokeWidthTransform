@@ -316,10 +316,7 @@ std::vector<std::vector<Component> > chain(cv::Mat swt, std::vector<Component> &
 //        std::cout << cp.rect.x << ", " << colorMean << "\n";
 
         //TODO: Why can we not set this to i + 1?
-        for(int j = 0; j < components.size(); j++){
-            if(i == j)
-                continue;
-
+        for(int j = i + 1; j < components.size(); j++){
             int &C2ClusterIndex = clusterIndexes[j];
             Component &cp2 = components[j];
 
@@ -328,9 +325,8 @@ std::vector<std::vector<Component> > chain(cv::Mat swt, std::vector<Component> &
                 continue;
 
             cv::Mat roi2 = frame(cp2.rect);
-            cv::Mat1b mask2(roi2.rows, roi2.cols);
 
-            cv::Scalar colorMean2 = cv::mean(roi2, mask2);
+            cv::Scalar colorMean2 = cv::mean(roi2);
 //            std::cout << colorMean2 << "\n";
 //            std::cout << abs(colorMean[0] - colorMean2[0]) << ", ";
 //            std::cout << abs(colorMean[1] - colorMean2[1]) << ", ";
@@ -347,9 +343,9 @@ std::vector<std::vector<Component> > chain(cv::Mat swt, std::vector<Component> &
                 continue;
 
 //            std::cout << std::max((float)cp.rect.height / (float)cp2.rect.height, (float)cp2.rect.height / (float)cp.rect.height) << "\n";
-            if( std::max((float)cp.rect.height / (float)cp2.rect.height, (float)cp2.rect.height / (float)cp.rect.height) > heightThresh)
+            if(std::max((float)cp.rect.height / (float)cp2.rect.height, (float)cp2.rect.height / (float)cp.rect.height) > heightThresh)
                 continue;
-            if( std::max((float)cp.rect.width / (float)cp2.rect.width, (float)cp2.rect.width / (float)cp.rect.width) > widthThresh)
+            if(std::max((float)cp.rect.width / (float)cp2.rect.width, (float)cp2.rect.width / (float)cp.rect.width) > widthThresh)
                 continue;
 /*
             std::cout << abs(cp.rectCenter.x - cp2.rectCenter.x + cp.rectCenter.y - cp.rectCenter.y) << ", ";
@@ -365,14 +361,10 @@ std::vector<std::vector<Component> > chain(cv::Mat swt, std::vector<Component> &
                 continue;
 
             if(C1ClusterIndex == -1 && C2ClusterIndex == -1){
-                std::vector<int> cluster;
-                cluster.push_back(i);
-                cluster.push_back(j);
+                std::vector<int> cluster{i, j};
                 clusters.push_back(cluster);
                 C1ClusterIndex = clusters.size() - 1;
                 C2ClusterIndex = clusters.size() - 1;
-//                C1ClusterIndex = clusterIndexes[i]
-//                C2ClusterIndex = clusterIndexes[j];
             }else if(C1ClusterIndex != -1 && C2ClusterIndex != -1){
                 clusters[C1ClusterIndex].insert(clusters[C1ClusterIndex].end(), clusters[C2ClusterIndex].begin(), clusters[C2ClusterIndex].end());
                 int tmp = C2ClusterIndex;
@@ -389,12 +381,12 @@ std::vector<std::vector<Component> > chain(cv::Mat swt, std::vector<Component> &
             }
         }
         if(C1ClusterIndex == -1){
-            std::vector<int> cluster;
-            cluster.push_back(i);
+            std::vector<int> cluster{i};
             clusters.push_back(cluster);
             C1ClusterIndex = clusters.size() - 1;
         }
     }
+    
 //    std::cout << "Cluster size: " << clusters.size() << std::endl;
     std::vector<std::vector<Component> > finalClusters;
     for(int i = 0; i < clusters.size(); i++){
@@ -408,7 +400,11 @@ std::vector<std::vector<Component> > chain(cv::Mat swt, std::vector<Component> &
         }
     }
 
-    std::cout << "Final number of clusters: " << finalClusters.size() << std::endl;
+    for(int i = 0; i < finalClusters.size(); i++){
+        std::cout << finalClusters[i].size() << std::endl;
+    }
+
+    std::cout << "Final number of chains: " << finalClusters.size() << std::endl;
     return finalClusters;
 }
 

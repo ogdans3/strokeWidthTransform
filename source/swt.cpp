@@ -70,10 +70,11 @@ class Point{
         };
 };
 
-std::vector<std::vector<Point> > swt(cv::Mat edges, cv::Mat grad_x, cv::Mat grad_y){
+std::vector<Point> swt(cv::Mat edges, cv::Mat grad_x, cv::Mat grad_y){
     //TODO: Do thorough tests on the value of distance
     float distance = 0.5;
     std::vector<std::vector<Point> > rays;
+    std::vector<Point> allRays;
     for(int row = 0; row < edges.size().height; row++){
         for(int col = 0; col < edges.size().width; col++){
             if(edges.at<uchar>(row, col) > 0){
@@ -129,11 +130,11 @@ std::vector<std::vector<Point> > swt(cv::Mat edges, cv::Mat grad_x, cv::Mat grad
                             //Calculate whether the new gradient is approximately opposite to the old gradient.
                             if (acos(gradient_x * -c_gradient_x + gradient_y * -c_gradient_y) < PI/2.0 ){
                                 float length = sqrt((float)((candidate.x - p.x) * (candidate.x - p.x) + (candidate.y - p.y) * (candidate.y - p.y)));
-//                                std::cout << candidate.x << ", " << candidate.y << "     " << p.x << ", " << p.y << ":  " << length << "\n";
                                 for(int i = 0; i < ray.size(); i++) {
                                     ray[i].length = length;
                                 }
                                 rays.push_back(ray);
+                                allRays.insert(allRays.end(), ray.begin(), ray.end());
                             }
                             break;
                         }
@@ -142,15 +143,111 @@ std::vector<std::vector<Point> > swt(cv::Mat edges, cv::Mat grad_x, cv::Mat grad
             }
         }
     }
-    return rays;
+    return allRays;
 }
 
 bool PointSort(const Point &lhs, const Point &rhs){
     return lhs.length < rhs.length;
 }
 
+
 //Connceted Component algorithm
-std::vector<std::vector<cv::Point > > cca(cv::Mat swt){
+std::vector<std::vector<cv::Point > > ccaRay(cv::Mat swt, std::vector<Point> rays){
+    long int start = ms();
+    float ratio = 3.0;
+    int vertices = 0;
+    boost::unordered_map<int, int> map;
+    std::vector<int> revMap;
+
+
+    std::cout << "Setup: " << ms() - start << std::endl;
+    start = ms();
+
+    for(int point = 0; point < rays.size(); point++){
+        Point p = rays[point];
+        int row = p.p.y;
+        int col = p.p.x;
+        float mag = p.length;
+        if(p.length > 0){
+            map[row * swt.size().width + col] = vertices;
+            revMap.push_back(point);
+            vertices ++;
+        }
+    }
+
+    boost::adjacency_list<boost::vecS, boost::vecS, boost::undirectedS> g(vertices);
+    std::cout << "Graph setup: " << ms() - start << std::endl;
+    start = ms();
+
+    int count = 0;
+    for(int point = 0; point < rays.size(); point++){
+        Point p = rays[point];
+        int row = p.p.y;
+        int col = p.p.x;
+
+        float mag = p.length;
+        if(mag > 0){
+            float* imgRow = swt.ptr<float>(row);
+            int pos = map.at(row * swt.size().width + col);
+            float mag2;
+            if(row + 1 < swt.size().height){
+                float* imgRowBelow = swt.ptr<float>(row + 1);
+                mag2 = imgRowBelow[col];
+                //TODO: Find out if && or || is better, it seems like it depends
+                if(mag2 > 0.0 && (mag / mag2 <= ratio && mag2 / mag <= ratio)){
+                    boost::add_edge(pos, map.at((row + 1) * swt.size().width + col), g);
+                    count ++;
+                }
+
+                if(col + 1 < swt.size().width){
+                    mag2 = imgRowBelow[col + 1];
+                    //TODO: Find out if && or || is better, it seems like it depends
+                    if(mag2 > 0.0 && (mag / mag2 <= ratio && mag2 / mag <= ratio)){
+                        boost::add_edge(pos, map.at((row + 1) * swt.size().width + (col + 1)), g);
+                        count ++;
+                    }
+                }
+
+                if(col - 1 > 0){
+                    mag2 = imgRowBelow[col - 1];
+                    //TODO: Find out if && or || is better, it seems like it depends
+                    if(mag2 > 0.0 && (mag / mag2 <= ratio && mag2 / mag <= ratio)){
+                        boost::add_edge(pos, map.at((row + 1) * swt.size().width + (col - 1)), g);
+                        count ++;
+                    }
+                }
+            }
+
+            if(col + 1 < swt.size().width){
+                mag2 = imgRow[col + 1];
+                //TODO: Find out if && or || is better, it seems like it depends
+                if(mag2 > 0.0 && (mag / mag2 <= ratio && mag2 / mag <= ratio)){
+                    boost::add_edge(pos, map.at(row * swt.size().width + (col + 1)), g);
+                    count ++;
+                }
+            }
+        }
+    }
+    std::cout << "Main loop: " << ms() - start << std::endl;
+    start = ms();
+
+
+    std::vector<int> component (boost::num_vertices (g));
+    size_t num_components = boost::connected_components (g, &component[0]);
+
+    std::vector<std::vector<cv::Point > > comps(num_components);
+    for (size_t i = 0; i < boost::num_vertices (g); ++i){
+        comps[component[i]].push_back(rays[revMap[i]].p);
+    }
+
+    std::cout << "Connected components: " << ms() - start << std::endl;
+    start = ms();
+
+    return comps;
+}
+
+//Connceted Component algorithm
+std::vector<std::vector<cv::Point > > cca(cv::Mat swt, std::vector<Point> rays){
     long int start = ms();
     float ratio = 3.0;
     int vertices = 0;
@@ -166,6 +263,7 @@ std::vector<std::vector<cv::Point > > cca(cv::Mat swt){
 //                std::cout << row * swt.size().width << ", " << col << std::endl;
                 cv::Point p(col, row);
                 revmap[vertices] = p;
+
                 vertices ++;
             }
         }
@@ -175,12 +273,12 @@ std::vector<std::vector<cv::Point > > cca(cv::Mat swt){
     start = ms();
 
     int count = 0;
-//    std::cout << "\n\n\n\n\n\n" << std::endl;
     for(int row = 0; row < swt.size().height; row++){
         for(int col = 0; col < swt.size().width; col++){
             float mag = swt.at<float>(row, col);
 //            std::cout << row << "/" << swt.size().height << ", " << col << "/" << swt.size().width << ", " << mag << "\n";
             if(mag > 0){
+//              std::cout << "(" << row << ", " << col << ")" << std::endl;
                 std::vector<cv::Point> neighbours{
                     cv::Point(row + 1, col),
                     cv::Point(row + 1, col - 1),
@@ -222,6 +320,7 @@ std::vector<std::vector<cv::Point > > cca(cv::Mat swt){
     std::cout << "Connected components: " << ms() - start << std::endl;
     start = ms();
 
+    return ccaRay(swt, rays);
     return comps;
 }
 
@@ -447,21 +546,27 @@ int main( int argc, char** argv )
             std::cout << "Starting" << "\n";
             long int start = ms();
 
-            std::vector<std::vector<Point> > rays = swt(edges, grad_x, grad_y);
+            std::vector<Point> rays = swt(edges, grad_x, grad_y);
             std::cout << "SWT: " << ms() - start << "\n";
             start = ms();
 
             cv::Mat1f swt(edges.size());
+            std::cout << "Ray Size: " << rays.size() << std::endl;
+            std::vector<Point> uniqueRays;
             for(int i = 0; i < rays.size(); i++){
-                for(int q = 0; q < rays[i].size(); q++){
-                    Point tmp = rays[i][q];
-                    swt.at<float>(tmp.p) = tmp.length;
+                Point tmp = rays[i];
+                //Remove duplicate values. the swt is initiated as an empty mat, all zeros, so if the point has a value
+                //then we have already visited that point in the rays array, so we delete that point.
+                if(swt.at<float>(tmp.p) == 0.0){
+                    uniqueRays.push_back(tmp);
                 }
+                swt.at<float>(tmp.p) = tmp.length;
             }
+            std::cout << "Unique ray Size: " << uniqueRays.size() << std::endl;
             std::cout << "After SWT: " << ms() - start << "\n";
             start = ms();
 
-            std::vector<std::vector<cv::Point> > components = cca(swt);
+            std::vector<std::vector<cv::Point> > components = cca(swt, uniqueRays);
             std::cout << "CCA: " << ms() - start << "\n";
             start = ms();
 

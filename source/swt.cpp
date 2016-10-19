@@ -315,7 +315,6 @@ std::vector<std::vector<Component> > chain(cv::Mat swt, std::vector<Component> &
         int &C1ClusterIndex = clusterIndexes[i];
 //        std::cout << cp.rect.x << ", " << colorMean << "\n";
 
-        //TODO: Why can we not set this to i + 1?
         for(int j = i + 1; j < components.size(); j++){
             int &C2ClusterIndex = clusterIndexes[j];
             Component &cp2 = components[j];
@@ -386,7 +385,7 @@ std::vector<std::vector<Component> > chain(cv::Mat swt, std::vector<Component> &
             C1ClusterIndex = clusters.size() - 1;
         }
     }
-    
+
 //    std::cout << "Cluster size: " << clusters.size() << std::endl;
     std::vector<std::vector<Component> > finalClusters;
     for(int i = 0; i < clusters.size(); i++){
@@ -400,9 +399,9 @@ std::vector<std::vector<Component> > chain(cv::Mat swt, std::vector<Component> &
         }
     }
 
-    for(int i = 0; i < finalClusters.size(); i++){
-        std::cout << finalClusters[i].size() << std::endl;
-    }
+//    for(int i = 0; i < finalClusters.size(); i++){
+//        std::cout << finalClusters[i].size() << std::endl;
+//    }
 
     std::cout << "Final number of chains: " << finalClusters.size() << std::endl;
     return finalClusters;
@@ -504,16 +503,16 @@ int main( int argc, char** argv )
                     cv::rectangle(finalClusterMat, clusters[i][q].rect, color, 2);
                 }
             }
-/*            cv::imshow("SWTMedian", swt);
+            cv::imshow("SWTMedian", swt);
             cv::imshow("Components", componentsMat);
             cv::imshow("ValidComponents", validComponentsMat);
             cv::imshow("Final chars", finalClusterMat);
-*/
-            cv::Mat finalClusterMatSmall;
+
+/*            cv::Mat finalClusterMatSmall;
             cv::resize(finalClusterMat, finalClusterMatSmall, cv::Size(1280, 720));
             cv::imshow("Final chars small", finalClusterMatSmall);
-
-            cv::waitKey(0);
+*/
+//            cv::waitKey(0);
         }
     }
     return 0;

@@ -71,7 +71,8 @@ class Point{
 };
 
 std::vector<std::vector<Point> > swt(cv::Mat edges, cv::Mat grad_x, cv::Mat grad_y){
-    float distance = 0.05;
+    //TODO: Do thorough tests on the value of distance
+    float distance = 0.5;
     std::vector<std::vector<Point> > rays;
     for(int row = 0; row < edges.size().height; row++){
         for(int col = 0; col < edges.size().width; col++){
@@ -81,15 +82,14 @@ std::vector<std::vector<Point> > swt(cv::Mat edges, cv::Mat grad_x, cv::Mat grad
                 Capsule position;
                 cv::Point floored_position;
 
-                position.x = (float) col + 0.5;
-                position.y = (float) row + 0.5;
+                position.x = (float) col;
+                position.y = (float) row;
                 p.x = col;
                 p.y = row;
                 ray.push_back(Point(p));
 
                 float gradient_x = grad_x.at<float>(row, col);
                 float gradient_y = grad_y.at<float>(row, col);
-                // normalize gradient
 //                std::cout << row << ", " << col << "  :  " << gradient_x << ", " << gradient_y << "\n";
                 float mag = sqrt((gradient_x * gradient_x) + (gradient_y * gradient_y));
                 gradient_x = -gradient_x/mag;
@@ -512,7 +512,7 @@ int main( int argc, char** argv )
             cv::resize(finalClusterMat, finalClusterMatSmall, cv::Size(1280, 720));
             cv::imshow("Final chars small", finalClusterMatSmall);
 */
-//            cv::waitKey(0);
+            cv::waitKey(0);
         }
     }
     return 0;

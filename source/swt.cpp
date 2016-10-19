@@ -149,16 +149,6 @@ bool PointSort(const Point &lhs, const Point &rhs){
     return lhs.length < rhs.length;
 }
 
-void medianFilter(cv::Mat swt, std::vector<std::vector<Point> > rays){
-    for(int i = 0; i < rays.size(); i++){
-        std::sort(rays[i].begin(), rays[i].end(), &PointSort);
-        float median = (rays[i][rays[i].size()/2]).length;
-        for(int q = 0; q < rays[i].size(); q++){
-            swt.at<float>(rays[i][q].p.y, rays[i][q].p.x) = std::min(rays[i][q].length, median);
-        }
-    }
-}
-
 //Connceted Component algorithm
 std::vector<std::vector<cv::Point > > cca(cv::Mat swt){
     long int start = ms();
@@ -472,10 +462,6 @@ int main( int argc, char** argv )
             cv::Mat finalClusterMat = frame.clone();
 //            cv::imshow("SWT", swt);
             std::cout << "After SWT: " << ms() - start << "\n";
-            start = ms();
-            medianFilter(swt, rays);
-
-            std::cout << "Median: " << ms() - start << "\n";
             start = ms();
 
             std::vector<std::vector<cv::Point> > components = cca(swt);

@@ -425,6 +425,10 @@ int main( int argc, char** argv )
                 break;
 
 //            cv::resize(frame, frame, cv::Size(640, 480));
+            cv::Mat componentsMat = frame.clone();
+            cv::Mat validComponentsMat = frame.clone();
+            cv::Mat finalClusterMat = frame.clone();
+
             cv::cvtColor(frame, gray, CV_RGB2GRAY);
             cv::Canny(gray, edges, 175, 320, 3);
             cv::GaussianBlur(gray, gaussian, cv::Size(5, 5), 0, 0);
@@ -442,25 +446,18 @@ int main( int argc, char** argv )
 
             std::cout << "Starting" << "\n";
             long int start = ms();
+
             std::vector<std::vector<Point> > rays = swt(edges, grad_x, grad_y);
             std::cout << "SWT: " << ms() - start << "\n";
             start = ms();
-//            std::cout << "Length of rays: " << rays.size() << "\n";
-//            exit(0);
+
             cv::Mat1f swt(edges.size());
             for(int i = 0; i < rays.size(); i++){
-//                std::cout << "\n";
                 for(int q = 0; q < rays[i].size(); q++){
                     Point tmp = rays[i][q];
-//                    std::cout << tmp.p << "\n";
-//                    std::cout << tmp.p.x << ", " << tmp.p.y << "\n";
                     swt.at<float>(tmp.p) = tmp.length;
                 }
             }
-            cv::Mat componentsMat = frame.clone();
-            cv::Mat validComponentsMat = frame.clone();
-            cv::Mat finalClusterMat = frame.clone();
-//            cv::imshow("SWT", swt);
             std::cout << "After SWT: " << ms() - start << "\n";
             start = ms();
 

@@ -157,8 +157,6 @@ std::vector<std::vector<cv::Point > > ccaRay(cv::Mat swt, std::vector<Point> ray
     float ratio = 3.0;
     int vertices = 0;
     boost::unordered_map<int, int> map;
-    std::vector<int> revMap;
-
 
     std::cout << "Setup: " << ms() - start << std::endl;
     start = ms();
@@ -167,12 +165,7 @@ std::vector<std::vector<cv::Point > > ccaRay(cv::Mat swt, std::vector<Point> ray
         Point p = rays[point];
         int row = p.p.y;
         int col = p.p.x;
-        float mag = p.length;
-        if(p.length > 0){
-            map[row * swt.size().width + col] = vertices;
-            revMap.push_back(point);
-            vertices ++;
-        }
+        map[row * swt.size().width + col] = point;
     }
 
     boost::adjacency_list<boost::vecS, boost::vecS, boost::undirectedS> g(vertices);
@@ -237,7 +230,7 @@ std::vector<std::vector<cv::Point > > ccaRay(cv::Mat swt, std::vector<Point> ray
 
     std::vector<std::vector<cv::Point > > comps(num_components);
     for (size_t i = 0; i < boost::num_vertices (g); ++i){
-        comps[component[i]].push_back(rays[revMap[i]].p);
+        comps[component[i]].push_back(rays[i].p);
     }
 
     std::cout << "Connected components: " << ms() - start << std::endl;

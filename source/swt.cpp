@@ -13,6 +13,8 @@
 #include <boost/functional/hash.hpp>
 
 #define PI 3.14159265
+bool verbose = true;
+
 long int ms(){
     std::chrono::seconds sec(1);
     return std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -153,22 +155,63 @@ bool PointSort(const Point &lhs, const Point &rhs){
     return lhs.length < rhs.length;
 }
 
+std::vector<std::vector<cv::Point> > mergeCCA( std::vector<std::vector<cv::Point> > connected, 
+                                                std::unordered_set <std::pair <int, int>, boost::hash <std::pair <int, int> > > mergeSet
+){
+    std::vector<int> connectedIndexes(connected.size(), -1);
+    std::vector<std::vector<cv::Point> > updatedConnected;
+    std::unordered_set <std::pair <int, int>, boost::hash <std::pair <int, int> > > updatedMergeSet;
+    for (const std::pair<int, int>& elem: mergeSet) {
+        if(connectedIndexes[elem.first] == connectedIndexes[elem.second] && connectedIndexes[elem.first] != -1){
+            continue;
+        }else if(connectedIndexes[elem.first] == -1 && connectedIndexes[elem.second] == -1){
+            std::vector<cv::Point> tmpVector;
+            tmpVector.insert(tmpVector.end(), connected[elem.first].begin(), connected[elem.first].end());
+            tmpVector.insert(tmpVector.end(), connected[elem.second].begin(), connected[elem.second].end());
+            updatedConnected.push_back(tmpVector);
+            connectedIndexes[elem.first] = updatedConnected.size() - 1;
+            connectedIndexes[elem.second] = updatedConnected.size() - 1;
+        }else if(connectedIndexes[elem.first] != connectedIndexes[elem.second] && connectedIndexes[elem.first] != -1 && connectedIndexes[elem.second] != -1){
+            updatedMergeSet.insert(std::make_pair(connectedIndexes[elem.first], connectedIndexes[elem.second]));
+        }else if(connectedIndexes[elem.first] != -1){
+            updatedConnected[connectedIndexes[elem.first]].insert(updatedConnected[connectedIndexes[elem.first]].end(), connected[elem.second].begin(),connected[elem.second].end());
+            connectedIndexes[elem.second] = connectedIndexes[elem.first];
+        }else if(connectedIndexes[elem.second] != -1){
+            updatedConnected[connectedIndexes[elem.second]].insert(updatedConnected[connectedIndexes[elem.second]].end(), connected[elem.first].begin(),connected[elem.first].end());
+            connectedIndexes[elem.first] = connectedIndexes[elem.second];
+        }
+    }
+
+    for(int i = 0; i < connectedIndexes.size(); i++){
+        if(connectedIndexes[i] == -1){
+            updatedConnected.push_back(connected[i]);
+        }
+    }
+
+    if(updatedMergeSet.size() == updatedConnected.size() || updatedMergeSet.size() == 0 || updatedMergeSet.size() == mergeSet.size())
+        return updatedConnected;
+    return mergeCCA(updatedConnected, updatedMergeSet);
+}
+
 std::vector<std::vector<cv::Point> > test(
             std::vector<Point> rays,
             boost::unordered_map<int, int> map, int ratio, cv::Mat swt
 ){
+    long int start = ms();
     std::vector<int> indexes(rays.size(), -1);
     int count, count2, count3, count4, count5, count6, count7;
     count = count2 = count3 = count4 = count5 = count6 = count7 = 0;
+
+    std::cout << "Setup: " << ms() - start << " ms" << std::endl;
+    start = ms();
+
     //testt
 /*
     std::vector<int> indexes;
     std::vector<std::vector<int> > connected;
 */
-    std::vector<std::pair<int, int> > unwanted;
     std::vector<std::vector<cv::Point> > connected;
-    std::unordered_set <std::pair <int, int>, boost::hash <std::pair <int, int> > > set;
-    std::unordered_set <std::pair <int, int>, boost::hash <std::pair <int, int> > > boostSet;
+    std::unordered_set <std::pair <int, int>, boost::hash <std::pair <int, int> > > mergeSet;
 
     for(int point = 0; point < rays.size(); point++){
         Point p = rays[point];
@@ -179,7 +222,6 @@ std::vector<std::vector<cv::Point> > test(
         float mag = swt.at<float>(row, col);
 //        std::cout << "(" << row << ", " << col << ")" << std::endl;
 
-        float* imgRow = swt.ptr<float>(row);
         int pos = map.at(row * swt.size().width + col);
         std::vector<cv::Point> neighbours{
             cv::Point(row + 1, col),
@@ -210,9 +252,7 @@ std::vector<std::vector<cv::Point> > test(
                     indexes[secondPos] = connected.size() - 1;
                 }else if(indexes[pos] != indexes[secondPos] && indexes[pos] != -1 && indexes[secondPos] != -1){
                     count4 ++;
-                    std::pair<int, int> tmpPair(indexes[pos], indexes[secondPos]);
-                    set.insert(tmpPair);
-                    unwanted.push_back(tmpPair);
+                    mergeSet.insert(std::make_pair(indexes[pos], indexes[secondPos]));
                 }else if(indexes[pos] == indexes[secondPos] && indexes[pos] != -1){
                     count5 ++;
                     continue;
@@ -229,43 +269,33 @@ std::vector<std::vector<cv::Point> > test(
         }
     }
 
-    int totCount = 0;
-    for(int i = 0; i < connected.size(); i++)
-        totCount += connected[i].size();
+    std::cout << "CCA Main loop: " << ms() - start << " ms" << std::endl;
+    start = ms();
 
-    std::cout << "Count: " << count << ", " << count2 << ", " << count3 << ", " << count4 << ", " << count5 << ", " << count6 << ", " << count7 << std::endl;
-    std::cout << "Total count: " << totCount << std::endl;
-    std::vector<int> connectedIndexes(connected.size(), -1);
-    std::vector<std::vector<cv::Point> > finallyConnected;
-    for (const std::pair<int, int>& elem: unwanted) {
-//        std::cout << elem.first << ", " << elem.second << ", " << connectedIndexes[elem.first] << ", " << connectedIndexes[elem.second] << std::endl;
-        if(connectedIndexes[elem.first] == connectedIndexes[elem.second] && connectedIndexes[elem.first] != -1){
-            continue;
-        }else if(connectedIndexes[elem.first] == -1 && connectedIndexes[elem.second] == -1){
-            std::vector<cv::Point> tmpVector;
-            tmpVector.insert(tmpVector.end(), connected[elem.first].begin(), connected[elem.first].end());
-            tmpVector.insert(tmpVector.end(), connected[elem.second].begin(), connected[elem.second].end());
-            finallyConnected.push_back(tmpVector);
-            connectedIndexes[elem.first] = finallyConnected.size() - 1;
-            connectedIndexes[elem.second] = finallyConnected.size() - 1;
-        }else if(connectedIndexes[elem.first] != -1){
-            finallyConnected[connectedIndexes[elem.first]].insert(finallyConnected[connectedIndexes[elem.first]].end(), connected[elem.second].begin(),connected[elem.second].end());
-            connectedIndexes[elem.second] = connectedIndexes[elem.first];
-        }else if(connectedIndexes[elem.second] != -1){
-            finallyConnected[connectedIndexes[elem.second]].insert(finallyConnected[connectedIndexes[elem.second]].end(), connected[elem.first].begin(),connected[elem.first].end());
-            connectedIndexes[elem.first] = connectedIndexes[elem.second];
-        }
+    std::vector<std::vector<cv::Point> > finallyConnected = mergeCCA(connected, mergeSet);
+
+    std::cout << "CCA Filter: " << ms() - start << " ms" << std::endl;
+    start = ms();
+
+    std::vector<std::vector<cv::Point> > components;
+    for(int i = 0; i < finallyConnected.size(); i++){
+        if(finallyConnected[i].size() != 0)
+            components.push_back(finallyConnected[i]);
     }
 
-    std::cout << "Boost set: " << boostSet.size() << std::endl;
-    std::cout << "Connected: " << connected.size() << std::endl;
-    std::cout << "Unwanted: " << unwanted.size() << std::endl;
-    std::cout << "Connected - Unwanted: " << (connected.size() - unwanted.size()) << std::endl;
-    std::cout << "Indexes: " << indexes.size() << std::endl;
-    std::cout << "Set: " << set.size() << std::endl;
-    std::cout << "Finally connected set: " << finallyConnected.size() << std::endl;
+    std::cout << "CCA Filter zero: " << ms() - start << " ms" << std::endl;
+    start = ms();
+    if(verbose){
+        std::cout << "Count: " << count << ", " << count2 << ", " << count3 << ", " << count4 << ", " << count5 << ", " << count6 << ", " << count7 << std::endl;
 
-    return finallyConnected;
+        std::cout << "Connected: " << connected.size() << std::endl;
+        std::cout << "Unwanted: " << mergeSet.size() << std::endl;
+        std::cout << "Indexes: " << indexes.size() << std::endl;
+        std::cout << "Finally connected set: " << finallyConnected.size() << std::endl;
+        std::cout << "Components: " << components.size() << std::endl;
+    }
+
+    return components;
 }
 
 //Connceted Component algorithm
@@ -280,7 +310,7 @@ std::vector<std::vector<cv::Point > > cca(cv::Mat swt, std::vector<Point> rays){
     boost::unordered_map<int, cv::Point> revmap;
 
 
-    std::cout << "Setup: " << ms() - start << std::endl;
+    std::cout << "Setup: " << ms() - start << " ms" << std::endl;
     start = ms();
     for(int row = 0; row < swt.size().height; row++){
         for(int col = 0; col < swt.size().width; col++){
@@ -294,15 +324,15 @@ std::vector<std::vector<cv::Point > > cca(cv::Mat swt, std::vector<Point> rays){
             }
         }
     }
+    std::cout << "Graph setup: " << ms() - start << " ms" << std::endl;
+    start = ms();
     std::vector<std::vector<cv::Point> > tmp = test(rays, map, ratio, swt);
-    std::cout << "Test: " << ms() - start << std::endl;
+    std::cout << "Test: " << ms() - start << " ms" << std::endl;
     start = ms();
 //    return tmp;
 
 
     boost::adjacency_list<boost::vecS, boost::vecS, boost::undirectedS> g(vertices);
-    std::cout << "Graph setup: " << ms() - start << std::endl;
-    start = ms();
 
     int count = 0;
     int count2 = 0;
@@ -343,7 +373,7 @@ std::vector<std::vector<cv::Point > > cca(cv::Mat swt, std::vector<Point> rays){
         }
     }
     std::cout << "Count: " << count << ", " << count2 << std::endl;
-    std::cout << "Main loop: " << ms() - start << std::endl;
+    std::cout << "Main loop: " << ms() - start << " ms" << std::endl;
     start = ms();
 
 
@@ -354,7 +384,7 @@ std::vector<std::vector<cv::Point > > cca(cv::Mat swt, std::vector<Point> rays){
     for (size_t i = 0; i < boost::num_vertices (g); ++i){
         comps[component[i]].push_back(revmap[i]);
     }
-    std::cout << "Connected components: " << ms() - start << std::endl;
+    std::cout << "Connected components: " << ms() - start << " ms" << std::endl;
     start = ms();
 
     std::cout << "Compare comps: " << comps.size() << ", " << tmp.size() << std::endl;
@@ -363,7 +393,7 @@ std::vector<std::vector<cv::Point > > cca(cv::Mat swt, std::vector<Point> rays){
 //    for(int i = 0; i < comps.size(); i++){
 //        std::cout << comps[i].size() << ", " << tmp[i].size() << std::endl;
 //    }
-    return tmp;
+//    return tmp;
     return comps;
 }
 
@@ -588,7 +618,7 @@ int main( int argc, char** argv )
             long int start = ms();
 
             std::vector<Point> rays = swt(edges, grad_x, grad_y);
-            std::cout << "SWT: " << ms() - start << "\n";
+            std::cout << "SWT: " << ms() - start << " ms" << "\n";
             start = ms();
 
             cv::Mat swt = cv::Mat::zeros(edges.size().height, edges.size().width, CV_32F);
@@ -604,20 +634,20 @@ int main( int argc, char** argv )
                 swt.at<float>(tmp.p) = tmp.length;
             }
             std::cout << "Unique ray Size: " << uniqueRays.size() << std::endl;
-            std::cout << "After SWT: " << ms() - start << "\n";
+            std::cout << "After SWT: " << ms() - start << " ms" << "\n";
             start = ms();
 
             std::vector<std::vector<cv::Point> > components = cca(swt, uniqueRays);
-            std::cout << "CCA: " << ms() - start << "\n";
+            std::cout << "CCA: " << ms() - start << " ms" << "\n";
             start = ms();
 
             std::vector<Component> validComponents = filterComponents(swt, components);
             std::cout << "Filtered size: " << validComponents.size() << std::endl;
-            std::cout << "Filter: " << ms() - start << "\n";
+            std::cout << "Filter: " << ms() - start << " ms" << "\n";
             start = ms();
 
             std::vector<std::vector<Component> > clusters = chain(swt, validComponents, frame);
-            std::cout << "Chain: " << ms() - start << "\n";
+            std::cout << "Chain: " << ms() - start << " ms" << "\n";
             start = ms();
 
             for(int i = 0; i < components.size(); i++){

@@ -279,12 +279,11 @@ std::vector<std::vector<cv::Point > > cca(cv::Mat swt, std::vector<Point> rays){
     std::cout << "CCA Filter zero: " << ms() - start << " ms" << std::endl;
     start = ms();
     if(verbose){
-        std::cout << "Count: " << count << ", " << count2 << ", " << count3 << ", " << count4 << ", " << count5 << ", " << count6 << ", " << count7 << std::endl;
-
-        std::cout << "Connected: " << connected.size() << std::endl;
-        std::cout << "Unwanted: " << mergeSet.size() << std::endl;
-        std::cout << "Indexes: " << indexes.size() << std::endl;
-        std::cout << "Components: " << components.size() << std::endl;
+        std::cout << "\t" << "Count: " << count << ", " << count2 << ", " << count3 << ", " << count4 << ", " << count5 << ", " << count6 << ", " << count7 << std::endl;
+        std::cout << "\t" << "Connected: " << connected.size() << std::endl;
+        std::cout << "\t" << "Unwanted: " << mergeSet.size() << std::endl;
+        std::cout << "\t" << "Indexes: " << indexes.size() << std::endl;
+        std::cout << "\t"<< "Components: " << components.size() << std::endl;
     }
 
     return components;
@@ -460,34 +459,11 @@ std::vector<std::vector<Component> > chain(cv::Mat swt, std::vector<Component> &
     return finalClusters;
 }
 
-int main( int argc, char** argv )
-{
-    std::vector<std::string> paths;
-    for(int i = 1; i < argc; i++){
-        paths.push_back(std::string(argv[i]));
-        if(strstr(argv[i], "-")){
-            break;
-        }
-    }
+void tmp(cv::Mat frame){
+            long int start = ms();
 
-    for(int i = 0; i < paths.size(); i++){
-        std::string filePath = paths[i];
-
-        cv::VideoCapture cap(filePath);
-
-        if (!cap.isOpened()){
-            std::cout << "!!! Failed to open file: " << filePath << std::endl;
-            return -1;
-        }
-
-        cv::Mat frame;
-        cv::Mat edges, gray, gaussian;
-        cv::Mat grad_x, grad_y, angles;
-        for(;;){
-            if (!cap.read(frame))
-                break;
-
-//            cv::resize(frame, frame, cv::Size(640, 480));
+            cv::Mat edges, gray, gaussian;
+            cv::Mat grad_x, grad_y, angles;
             cv::Mat componentsMat = frame.clone();
             cv::Mat validComponentsMat = frame.clone();
             cv::Mat finalClusterMat = frame.clone();
@@ -499,23 +475,15 @@ int main( int argc, char** argv )
             cv::Scharr(gaussian, grad_x, CV_32F, 1, 0);
             cv::Scharr(gaussian, grad_y, CV_32F, 0, 1);
 
-/*
-            cv::imshow("IMG", frame);
-            cv::imshow("GA", gaussian);
-            cv::imshow("Edges", edges);
-            cv::imshow("grad_x", grad_x);
-            cv::imshow("grad_y", grad_y);
-*/
-
-            std::cout << "Starting" << "\n";
-            long int start = ms();
+            std::cout << "Initial image processing (gaussian blur etc.): " << ms() - start << " ms" << "\n";
+            start = ms();
 
             std::vector<Point> rays = swt(edges, grad_x, grad_y);
             std::cout << "SWT: " << ms() - start << " ms" << "\n";
             start = ms();
 
             cv::Mat swt = cv::Mat::zeros(edges.size().height, edges.size().width, CV_32F);
-            std::cout << "Ray Size: " << rays.size() << std::endl;
+            std::cout << "\t" << "Ray Size: " << rays.size() << std::endl;
             std::vector<Point> uniqueRays;
             for(int i = 0; i < rays.size(); i++){
                 Point tmp = rays[i];
@@ -526,7 +494,7 @@ int main( int argc, char** argv )
                 }
                 swt.at<float>(tmp.p) = tmp.length;
             }
-            std::cout << "Unique ray Size: " << uniqueRays.size() << std::endl;
+            std::cout << "\t" << "Unique ray Size: " << uniqueRays.size() << std::endl;
             std::cout << "After SWT: " << ms() - start << " ms" << "\n";
             start = ms();
 
@@ -556,6 +524,14 @@ int main( int argc, char** argv )
                     cv::rectangle(finalClusterMat, clusters[i][q].rect, color, 2);
                 }
             }
+
+
+            cv::imshow("IMG", frame);
+            cv::imshow("GA", gaussian);
+            cv::imshow("Edges", edges);
+            cv::imshow("grad_x", grad_x);
+            cv::imshow("grad_y", grad_y);
+
             cv::imshow("SWTMedian", swt);
             cv::imshow("Components", componentsMat);
             cv::imshow("ValidComponents", validComponentsMat);
@@ -566,6 +542,34 @@ int main( int argc, char** argv )
             cv::imshow("Final chars small", finalClusterMatSmall);
 */
             cv::waitKey(0);
+}
+
+int main(int argc, char** argv){
+    std::vector<std::string> paths;
+    for(int i = 1; i < argc; i++){
+        paths.push_back(std::string(argv[i]));
+        if(strstr(argv[i], "-")){
+            break;
+        }
+    }
+
+    for(int i = 0; i < paths.size(); i++){
+        std::string filePath = paths[i];
+
+        cv::VideoCapture cap(filePath);
+
+        if (!cap.isOpened()){
+            std::cout << "!!! Failed to open file: " << filePath << std::endl;
+            return -1;
+        }
+
+        cv::Mat frame;
+        for(;;){
+            if (!cap.read(frame))
+                break;
+
+            tmp(frame);
+//            cv::resize(frame, frame, cv::Size(640, 480));
         }
     }
     return 0;

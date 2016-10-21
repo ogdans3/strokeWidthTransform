@@ -151,10 +151,6 @@ std::vector<Point> swt(cv::Mat edges, cv::Mat grad_x, cv::Mat grad_y){
     return allRays;
 }
 
-bool PointSort(const Point &lhs, const Point &rhs){
-    return lhs.length < rhs.length;
-}
-
 std::vector<std::vector<cv::Point> > mergeCCA( std::vector<std::vector<cv::Point> > connected, 
                                                 std::unordered_set <std::pair <int, int>, boost::hash <std::pair <int, int> > > mergeSet
 ){
@@ -182,6 +178,7 @@ std::vector<std::vector<cv::Point> > mergeCCA( std::vector<std::vector<cv::Point
         }
     }
 
+    //TODO: There has to be a more efficient way of merging. This loop should be unnecessary
     for(int i = 0; i < connectedIndexes.size(); i++){
         if(connectedIndexes[i] == -1){
             updatedConnected.push_back(connected[i]);
@@ -193,23 +190,26 @@ std::vector<std::vector<cv::Point> > mergeCCA( std::vector<std::vector<cv::Point
     return mergeCCA(updatedConnected, updatedMergeSet);
 }
 
-std::vector<std::vector<cv::Point> > test(
-            std::vector<Point> rays,
-            boost::unordered_map<int, int> map, int ratio, cv::Mat swt
-){
+//Connceted Component algorithm
+std::vector<std::vector<cv::Point > > cca(cv::Mat swt, std::vector<Point> rays){
     long int start = ms();
+    float ratio = 3.0;
+
+    boost::unordered_map<int, int> map;
+    for(int point = 0; point < rays.size(); point++){
+        Point p = rays[point];
+        int row = p.p.y;
+        int col = p.p.x;
+        map[row * swt.size().width + col] = point;
+    }
+
+    std::cout << "Graph setup: " << ms() - start << " ms" << std::endl;
+    start = ms();
+
     std::vector<int> indexes(rays.size(), -1);
     int count, count2, count3, count4, count5, count6, count7;
     count = count2 = count3 = count4 = count5 = count6 = count7 = 0;
 
-    std::cout << "Setup: " << ms() - start << " ms" << std::endl;
-    start = ms();
-
-    //testt
-/*
-    std::vector<int> indexes;
-    std::vector<std::vector<int> > connected;
-*/
     std::vector<std::vector<cv::Point> > connected;
     std::unordered_set <std::pair <int, int>, boost::hash <std::pair <int, int> > > mergeSet;
 
@@ -236,8 +236,7 @@ std::vector<std::vector<cv::Point> > test(
                 continue;
             }
             float mag2 = swt.at<float>(neighbour.x, neighbour.y);
-//            std::cout << "Mag 2: " << mag2 << std::endl;
-//                    std::cout << "Mags: " << mag << ", " << mag2 << "\n";
+//          std::cout << "Mags: " << mag << ", " << mag2 << "\n";
             //TODO: Find out if && or || is better, it seems like it depends
             count ++;
             if(mag2 > 0.0 && (mag / mag2 <= ratio && mag2 / mag <= ratio)){
@@ -272,16 +271,10 @@ std::vector<std::vector<cv::Point> > test(
     std::cout << "CCA Main loop: " << ms() - start << " ms" << std::endl;
     start = ms();
 
-    std::vector<std::vector<cv::Point> > finallyConnected = mergeCCA(connected, mergeSet);
+    std::vector<std::vector<cv::Point> > components = mergeCCA(connected, mergeSet);
 
-    std::cout << "CCA Filter: " << ms() - start << " ms" << std::endl;
+    std::cout << "CCA merge: " << ms() - start << " ms" << std::endl;
     start = ms();
-
-    std::vector<std::vector<cv::Point> > components;
-    for(int i = 0; i < finallyConnected.size(); i++){
-        if(finallyConnected[i].size() != 0)
-            components.push_back(finallyConnected[i]);
-    }
 
     std::cout << "CCA Filter zero: " << ms() - start << " ms" << std::endl;
     start = ms();
@@ -291,110 +284,10 @@ std::vector<std::vector<cv::Point> > test(
         std::cout << "Connected: " << connected.size() << std::endl;
         std::cout << "Unwanted: " << mergeSet.size() << std::endl;
         std::cout << "Indexes: " << indexes.size() << std::endl;
-        std::cout << "Finally connected set: " << finallyConnected.size() << std::endl;
         std::cout << "Components: " << components.size() << std::endl;
     }
 
     return components;
-}
-
-//Connceted Component algorithm
-std::vector<std::vector<cv::Point > > cca(cv::Mat swt, std::vector<Point> rays){
-    //ccac
-    long int start = ms();
-    float ratio = 3.0;
-    int vertices = 0;
-
-
-    boost::unordered_map<int, int> map;
-    boost::unordered_map<int, cv::Point> revmap;
-
-
-    std::cout << "Setup: " << ms() - start << " ms" << std::endl;
-    start = ms();
-    for(int row = 0; row < swt.size().height; row++){
-        for(int col = 0; col < swt.size().width; col++){
-            if(swt.at<float>(row, col) > 0.0){
-                map[row * swt.size().width + col] = vertices;
-//                std::cout << row * swt.size().width << ", " << col << std::endl;
-                cv::Point p(col, row);
-                revmap[vertices] = p;
-
-                vertices ++;
-            }
-        }
-    }
-    std::cout << "Graph setup: " << ms() - start << " ms" << std::endl;
-    start = ms();
-    std::vector<std::vector<cv::Point> > tmp = test(rays, map, ratio, swt);
-    std::cout << "Test: " << ms() - start << " ms" << std::endl;
-    start = ms();
-//    return tmp;
-
-
-    boost::adjacency_list<boost::vecS, boost::vecS, boost::undirectedS> g(vertices);
-
-    int count = 0;
-    int count2 = 0;
-    for(int row = 0; row < swt.size().height; row++){
-        for(int col = 0; col < swt.size().width; col++){
-            float mag = swt.at<float>(row, col);
-//            std::cout << row << "/" << swt.size().height << ", " << col << "/" << swt.size().width << ", " << mag << "\n";
-            if(mag > 0){
-//              std::cout << "(" << row << ", " << col << ")" << std::endl;
-                std::vector<cv::Point> neighbours{
-                    cv::Point(row + 1, col),
-                    cv::Point(row + 1, col - 1),
-                    cv::Point(row + 1, col + 1),
-                    cv::Point(row, col + 1)
-                };
-                int pos = map.at(row * swt.size().width + col);
-                for(int i = 0; i < neighbours.size(); i++){
-                    cv::Point neighbour = neighbours[i];
-//                    std::cout << row << ", " << col << "  :::  " << neighbour.x << ", " << neighbour.y << "  :  " << swt.size().width << ", " << swt.size().height << std::endl;
-                    if (neighbour.x < 0 || neighbour.y < 0 || neighbour.x >= swt.size().height || neighbour.y >= swt.size().width){
-                        continue;
-                    }
-                    float mag2 = swt.at<float>(neighbour.x, neighbour.y);
-//                    std::cout << "Mag 2: " << mag2 << std::endl;
-//                    std::cout << "Mags: " << mag << ", " << mag2 << "\n";
-                    //TODO: Find out if && or || is better, it seems like it depends
-                    count ++;
-                    if(mag2 > 0.0 && (mag / mag2 <= ratio && mag2 / mag <= ratio)){
-                        count2 ++;
-//                        std::cout << neighbour.x * swt.size().width << ", " << neighbour.y;
-//                        std::cout << "(" << neighbour.x << ", " << neighbour.y << ")";
-//                        std::cout << "   ::::    " << map.at(row * swt.size().width + col) << ", " << map.at(neighbour.x * swt.size().width + neighbour.y);
-//                        std::cout << "                        " << row << "/" << swt.size().height << ", " << col << "/" << swt.size().width << "\n";
-                        boost::add_edge(pos, map.at(neighbour.x * swt.size().width + neighbour.y), g);
-                    }
-                }
-            }
-        }
-    }
-    std::cout << "Count: " << count << ", " << count2 << std::endl;
-    std::cout << "Main loop: " << ms() - start << " ms" << std::endl;
-    start = ms();
-
-
-    std::vector<int> component (boost::num_vertices (g));
-    size_t num_components = boost::connected_components (g, &component[0]);
-
-    std::vector<std::vector<cv::Point > > comps(num_components);
-    for (size_t i = 0; i < boost::num_vertices (g); ++i){
-        comps[component[i]].push_back(revmap[i]);
-    }
-    std::cout << "Connected components: " << ms() - start << " ms" << std::endl;
-    start = ms();
-
-    std::cout << "Compare comps: " << comps.size() << ", " << tmp.size() << std::endl;
-
-    std::cout << "Component stats, correct: " << num_components << ", " << boost::num_vertices(g) << ", Edges: " << boost::num_edges (g) << std::endl;
-//    for(int i = 0; i < comps.size(); i++){
-//        std::cout << comps[i].size() << ", " << tmp[i].size() << std::endl;
-//    }
-//    return tmp;
-    return comps;
 }
 
 void shit(cv::Mat swt, std::vector<cv::Point> &component,

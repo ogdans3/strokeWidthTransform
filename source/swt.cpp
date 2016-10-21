@@ -9,6 +9,8 @@
 #include <set>
 #include <iterator>
 #include <chrono>
+#include <unordered_set>
+#include <boost/functional/hash.hpp>
 
 #define PI 3.14159265
 long int ms(){
@@ -75,6 +77,7 @@ std::vector<Point> swt(cv::Mat edges, cv::Mat grad_x, cv::Mat grad_y){
     float distance = 0.5;
     std::vector<std::vector<Point> > rays;
     std::vector<Point> allRays;
+
     for(int row = 0; row < edges.size().height; row++){
         for(int col = 0; col < edges.size().width; col++){
             if(edges.at<uchar>(row, col) > 0){
@@ -150,102 +153,132 @@ bool PointSort(const Point &lhs, const Point &rhs){
     return lhs.length < rhs.length;
 }
 
-
-//Connceted Component algorithm
-std::vector<std::vector<cv::Point > > ccaRay(cv::Mat swt, std::vector<Point> rays){
-    long int start = ms();
-    float ratio = 3.0;
-    int vertices = 0;
-    boost::unordered_map<int, int> map;
-
-    std::cout << "Setup: " << ms() - start << std::endl;
-    start = ms();
+std::vector<std::vector<cv::Point> > test(
+            std::vector<Point> rays,
+            boost::unordered_map<int, int> map, int ratio, cv::Mat swt
+){
+    std::vector<int> indexes(rays.size(), -1);
+    int count, count2, count3, count4, count5, count6, count7;
+    count = count2 = count3 = count4 = count5 = count6 = count7 = 0;
+    //testt
+/*
+    std::vector<int> indexes;
+    std::vector<std::vector<int> > connected;
+*/
+    std::vector<std::pair<int, int> > unwanted;
+    std::vector<std::vector<cv::Point> > connected;
+    std::unordered_set <std::pair <int, int>, boost::hash <std::pair <int, int> > > set;
+    std::unordered_set <std::pair <int, int>, boost::hash <std::pair <int, int> > > boostSet;
 
     for(int point = 0; point < rays.size(); point++){
         Point p = rays[point];
         int row = p.p.y;
         int col = p.p.x;
-        map[row * swt.size().width + col] = point;
-    }
 
-    boost::adjacency_list<boost::vecS, boost::vecS, boost::undirectedS> g(vertices);
-    std::cout << "Graph setup: " << ms() - start << std::endl;
-    start = ms();
+//        float mag = p.length;
+        float mag = swt.at<float>(row, col);
+//        std::cout << "(" << row << ", " << col << ")" << std::endl;
 
-    int count = 0;
-    for(int point = 0; point < rays.size(); point++){
-        Point p = rays[point];
-        int row = p.p.y;
-        int col = p.p.x;
-
-        float mag = p.length;
-        if(mag > 0){
-            float* imgRow = swt.ptr<float>(row);
-            int pos = map.at(row * swt.size().width + col);
-            float mag2;
-            if(row + 1 < swt.size().height){
-                float* imgRowBelow = swt.ptr<float>(row + 1);
-                mag2 = imgRowBelow[col];
-                //TODO: Find out if && or || is better, it seems like it depends
-                if(mag2 > 0.0 && (mag / mag2 <= ratio && mag2 / mag <= ratio)){
-                    boost::add_edge(pos, map.at((row + 1) * swt.size().width + col), g);
-                    count ++;
-                }
-
-                if(col + 1 < swt.size().width){
-                    mag2 = imgRowBelow[col + 1];
-                    //TODO: Find out if && or || is better, it seems like it depends
-                    if(mag2 > 0.0 && (mag / mag2 <= ratio && mag2 / mag <= ratio)){
-                        boost::add_edge(pos, map.at((row + 1) * swt.size().width + (col + 1)), g);
-                        count ++;
-                    }
-                }
-
-                if(col - 1 > 0){
-                    mag2 = imgRowBelow[col - 1];
-                    //TODO: Find out if && or || is better, it seems like it depends
-                    if(mag2 > 0.0 && (mag / mag2 <= ratio && mag2 / mag <= ratio)){
-                        boost::add_edge(pos, map.at((row + 1) * swt.size().width + (col - 1)), g);
-                        count ++;
-                    }
-                }
+        float* imgRow = swt.ptr<float>(row);
+        int pos = map.at(row * swt.size().width + col);
+        std::vector<cv::Point> neighbours{
+            cv::Point(row + 1, col),
+            cv::Point(row + 1, col - 1),
+            cv::Point(row + 1, col + 1),
+            cv::Point(row, col + 1)
+        };
+        for(int i = 0; i < neighbours.size(); i++){
+            cv::Point neighbour = neighbours[i];
+//            std::cout << row << ", " << col << "  :::  " << neighbour.x << ", " << neighbour.y << "  :  " << swt.size().width << ", " << swt.size().height << std::endl;
+            if (neighbour.x < 0 || neighbour.y < 0 || neighbour.x >= swt.size().height || neighbour.y >= swt.size().width){
+                continue;
             }
+            float mag2 = swt.at<float>(neighbour.x, neighbour.y);
+//            std::cout << "Mag 2: " << mag2 << std::endl;
+//                    std::cout << "Mags: " << mag << ", " << mag2 << "\n";
+            //TODO: Find out if && or || is better, it seems like it depends
+            count ++;
+            if(mag2 > 0.0 && (mag / mag2 <= ratio && mag2 / mag <= ratio)){
+                count2 ++;
+                int secondPos = map.at(neighbour.x * swt.size().width + neighbour.y);
 
-            if(col + 1 < swt.size().width){
-                mag2 = imgRow[col + 1];
-                //TODO: Find out if && or || is better, it seems like it depends
-                if(mag2 > 0.0 && (mag / mag2 <= ratio && mag2 / mag <= ratio)){
-                    boost::add_edge(pos, map.at(row * swt.size().width + (col + 1)), g);
-                    count ++;
+                if(indexes[pos] == -1 && indexes[secondPos] == -1){
+                    count3 ++;
+                    std::vector<cv::Point> tmpVec{p.p, cv::Point(neighbour.y, neighbour.x)};
+                    connected.push_back(tmpVec);
+                    indexes[pos] = connected.size() - 1;
+                    indexes[secondPos] = connected.size() - 1;
+                }else if(indexes[pos] != indexes[secondPos] && indexes[pos] != -1 && indexes[secondPos] != -1){
+                    count4 ++;
+                    std::pair<int, int> tmpPair(indexes[pos], indexes[secondPos]);
+                    set.insert(tmpPair);
+                    unwanted.push_back(tmpPair);
+                }else if(indexes[pos] == indexes[secondPos] && indexes[pos] != -1){
+                    count5 ++;
+                    continue;
+                }else if(indexes[pos] != -1){
+                    count6 ++;
+                    connected[indexes[pos]].push_back(cv::Point(neighbour.y, neighbour.x));
+                    indexes[secondPos] = indexes[pos];
+                }else if(indexes[secondPos] != -1){
+                    count7 ++;
+                    connected[indexes[secondPos]].push_back(p.p);
+                    indexes[pos] = indexes[secondPos];
                 }
             }
         }
     }
-    std::cout << "Main loop: " << ms() - start << std::endl;
-    start = ms();
 
+    int totCount = 0;
+    for(int i = 0; i < connected.size(); i++)
+        totCount += connected[i].size();
 
-    std::vector<int> component (boost::num_vertices (g));
-    size_t num_components = boost::connected_components (g, &component[0]);
-
-    std::vector<std::vector<cv::Point > > comps(num_components);
-    for (size_t i = 0; i < boost::num_vertices (g); ++i){
-        comps[component[i]].push_back(rays[i].p);
+    std::cout << "Count: " << count << ", " << count2 << ", " << count3 << ", " << count4 << ", " << count5 << ", " << count6 << ", " << count7 << std::endl;
+    std::cout << "Total count: " << totCount << std::endl;
+    std::vector<int> connectedIndexes(connected.size(), -1);
+    std::vector<std::vector<cv::Point> > finallyConnected;
+    for (const std::pair<int, int>& elem: unwanted) {
+//        std::cout << elem.first << ", " << elem.second << ", " << connectedIndexes[elem.first] << ", " << connectedIndexes[elem.second] << std::endl;
+        if(connectedIndexes[elem.first] == connectedIndexes[elem.second] && connectedIndexes[elem.first] != -1){
+            continue;
+        }else if(connectedIndexes[elem.first] == -1 && connectedIndexes[elem.second] == -1){
+            std::vector<cv::Point> tmpVector;
+            tmpVector.insert(tmpVector.end(), connected[elem.first].begin(), connected[elem.first].end());
+            tmpVector.insert(tmpVector.end(), connected[elem.second].begin(), connected[elem.second].end());
+            finallyConnected.push_back(tmpVector);
+            connectedIndexes[elem.first] = finallyConnected.size() - 1;
+            connectedIndexes[elem.second] = finallyConnected.size() - 1;
+        }else if(connectedIndexes[elem.first] != -1){
+            finallyConnected[connectedIndexes[elem.first]].insert(finallyConnected[connectedIndexes[elem.first]].end(), connected[elem.second].begin(),connected[elem.second].end());
+            connectedIndexes[elem.second] = connectedIndexes[elem.first];
+        }else if(connectedIndexes[elem.second] != -1){
+            finallyConnected[connectedIndexes[elem.second]].insert(finallyConnected[connectedIndexes[elem.second]].end(), connected[elem.first].begin(),connected[elem.first].end());
+            connectedIndexes[elem.first] = connectedIndexes[elem.second];
+        }
     }
 
-    std::cout << "Connected components: " << ms() - start << std::endl;
-    start = ms();
+    std::cout << "Boost set: " << boostSet.size() << std::endl;
+    std::cout << "Connected: " << connected.size() << std::endl;
+    std::cout << "Unwanted: " << unwanted.size() << std::endl;
+    std::cout << "Connected - Unwanted: " << (connected.size() - unwanted.size()) << std::endl;
+    std::cout << "Indexes: " << indexes.size() << std::endl;
+    std::cout << "Set: " << set.size() << std::endl;
+    std::cout << "Finally connected set: " << finallyConnected.size() << std::endl;
 
-    return comps;
+    return finallyConnected;
 }
 
 //Connceted Component algorithm
 std::vector<std::vector<cv::Point > > cca(cv::Mat swt, std::vector<Point> rays){
+    //ccac
     long int start = ms();
     float ratio = 3.0;
     int vertices = 0;
+
+
     boost::unordered_map<int, int> map;
     boost::unordered_map<int, cv::Point> revmap;
+
 
     std::cout << "Setup: " << ms() - start << std::endl;
     start = ms();
@@ -261,11 +294,18 @@ std::vector<std::vector<cv::Point > > cca(cv::Mat swt, std::vector<Point> rays){
             }
         }
     }
+    std::vector<std::vector<cv::Point> > tmp = test(rays, map, ratio, swt);
+    std::cout << "Test: " << ms() - start << std::endl;
+    start = ms();
+//    return tmp;
+
+
     boost::adjacency_list<boost::vecS, boost::vecS, boost::undirectedS> g(vertices);
     std::cout << "Graph setup: " << ms() - start << std::endl;
     start = ms();
 
     int count = 0;
+    int count2 = 0;
     for(int row = 0; row < swt.size().height; row++){
         for(int col = 0; col < swt.size().width; col++){
             float mag = swt.at<float>(row, col);
@@ -286,19 +326,23 @@ std::vector<std::vector<cv::Point > > cca(cv::Mat swt, std::vector<Point> rays){
                         continue;
                     }
                     float mag2 = swt.at<float>(neighbour.x, neighbour.y);
+//                    std::cout << "Mag 2: " << mag2 << std::endl;
 //                    std::cout << "Mags: " << mag << ", " << mag2 << "\n";
                     //TODO: Find out if && or || is better, it seems like it depends
+                    count ++;
                     if(mag2 > 0.0 && (mag / mag2 <= ratio && mag2 / mag <= ratio)){
+                        count2 ++;
 //                        std::cout << neighbour.x * swt.size().width << ", " << neighbour.y;
+//                        std::cout << "(" << neighbour.x << ", " << neighbour.y << ")";
 //                        std::cout << "   ::::    " << map.at(row * swt.size().width + col) << ", " << map.at(neighbour.x * swt.size().width + neighbour.y);
 //                        std::cout << "                        " << row << "/" << swt.size().height << ", " << col << "/" << swt.size().width << "\n";
                         boost::add_edge(pos, map.at(neighbour.x * swt.size().width + neighbour.y), g);
-                        count ++;
                     }
                 }
             }
         }
     }
+    std::cout << "Count: " << count << ", " << count2 << std::endl;
     std::cout << "Main loop: " << ms() - start << std::endl;
     start = ms();
 
@@ -313,7 +357,13 @@ std::vector<std::vector<cv::Point > > cca(cv::Mat swt, std::vector<Point> rays){
     std::cout << "Connected components: " << ms() - start << std::endl;
     start = ms();
 
-    return ccaRay(swt, rays);
+    std::cout << "Compare comps: " << comps.size() << ", " << tmp.size() << std::endl;
+
+    std::cout << "Component stats, correct: " << num_components << ", " << boost::num_vertices(g) << ", Edges: " << boost::num_edges (g) << std::endl;
+//    for(int i = 0; i < comps.size(); i++){
+//        std::cout << comps[i].size() << ", " << tmp[i].size() << std::endl;
+//    }
+    return tmp;
     return comps;
 }
 
@@ -383,9 +433,7 @@ std::vector<std::vector<Component> > chain(cv::Mat swt, std::vector<Component> &
     int minLengthOfCluster = 1;
 //    std::vector<ComponentCluster> clusters;
     std::vector<Component> components = std::vector<Component>(components2.begin(), components2.end());
-    std::vector<int> clusterIndexes;
-    for(int i = 0; i < components.size(); i++)
-        clusterIndexes.push_back(-1);
+    std::vector<int> clusterIndexes(components.size(), -1);
 
     std::vector<std::vector<int>> clusters;
     for(int i = 0; i < components.size(); i++){
@@ -543,7 +591,7 @@ int main( int argc, char** argv )
             std::cout << "SWT: " << ms() - start << "\n";
             start = ms();
 
-            cv::Mat1f swt(edges.size());
+            cv::Mat swt = cv::Mat::zeros(edges.size().height, edges.size().width, CV_32F);
             std::cout << "Ray Size: " << rays.size() << std::endl;
             std::vector<Point> uniqueRays;
             for(int i = 0; i < rays.size(); i++){
@@ -564,6 +612,7 @@ int main( int argc, char** argv )
             start = ms();
 
             std::vector<Component> validComponents = filterComponents(swt, components);
+            std::cout << "Filtered size: " << validComponents.size() << std::endl;
             std::cout << "Filter: " << ms() - start << "\n";
             start = ms();
 

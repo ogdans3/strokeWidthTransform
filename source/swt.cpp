@@ -14,7 +14,7 @@
 
 #define PI 3.14159265
 bool verbose = false;
-bool blac_on_white = false;
+bool blac_on_white = true;
 
 long int ms(){
     std::chrono::seconds sec(1);

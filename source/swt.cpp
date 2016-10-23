@@ -14,7 +14,7 @@
 
 #define PI 3.14159265
 bool verbose = false;
-bool blac_on_white = true;
+bool black_on_white = true;
 
 long int ms(){
     std::chrono::seconds sec(1);
@@ -99,7 +99,7 @@ std::vector<Point> swt(cv::Mat edges, cv::Mat grad_x, cv::Mat grad_y){
                 float gradient_y = grad_y.at<float>(row, col);
 //                std::cout << row << ", " << col << "  :  " << gradient_x << ", " << gradient_y << "\n";
                 float mag = sqrt((gradient_x * gradient_x) + (gradient_y * gradient_y));
-                if(blac_on_white){
+                if(black_on_white){
                     gradient_x = -gradient_x/mag;
                     gradient_y = -gradient_y/mag;
                 }else{
@@ -134,7 +134,7 @@ std::vector<Point> swt(cv::Mat edges, cv::Mat grad_x, cv::Mat grad_y){
                             // normalize gradient
                             float c_mag = sqrt((c_gradient_x * c_gradient_x) + (c_gradient_y * c_gradient_y));
 //                            std::cout << "C: " << c_gradient_x << ", " << c_gradient_y << ", " << c_mag << "   :::::::  " << candidate.x << ", " << candidate.y << "\n";
-                            if(blac_on_white){
+                            if(black_on_white){
                                 c_gradient_x = -c_gradient_x/c_mag;
                                 c_gradient_y = -c_gradient_y/c_mag;
                             }else{

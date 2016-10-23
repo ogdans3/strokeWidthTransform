@@ -13,7 +13,7 @@
 #include <boost/functional/hash.hpp>
 
 #define PI 3.14159265
-bool verbose = true;
+bool verbose = false;
 
 long int ms(){
     std::chrono::seconds sec(1);
@@ -291,34 +291,33 @@ std::vector<std::vector<cv::Point > > cca(cv::Mat swt, std::vector<Point> rays){
 
 void shit(cv::Mat swt, std::vector<cv::Point> &component,
         float &mean,
-        float &variance,
         float &median
 ){
 
     std::vector<float> temp;
     mean = 0;
-    variance = 0;
     for(int i = 0; i < component.size(); i++){
         float t = swt.at<float>(component[i]);
         mean += t;
         temp.push_back(t);
     }
     mean = mean / (float)(component.size());
-    for (std::vector<float>::const_iterator it = temp.begin(); it != temp.end(); it++) {
-        variance += (*it - mean) * (*it - mean);
-    }
-    variance = variance / (float) component.size();
     std::sort(temp.begin(), temp.end());
     median = temp[temp.size()/2];
 }
 
 std::vector<Component> filterComponents(cv::Mat swt, std::vector<std::vector<cv::Point> > components){
+    int widthThresh = 4;
+    int heightThresh = 8;
+    int heightWidthRatioThresh = 10;
+    int diameterMedianRatioThresh = 20;
+
     std::vector<Component> validComponents;
     for(int i = 0; i < components.size(); i++){
         std::vector<cv::Point> component = components[i];
         cv::Rect rect = cv::boundingRect(component);
-        float mean, variance, median;
-        shit(swt, component, mean, variance, median);
+        float mean, median;
+        shit(swt, component, mean, median);
         Component cp;
         cp.meanStrokeWidth = mean;
         cp.points = component;
@@ -326,18 +325,32 @@ std::vector<Component> filterComponents(cv::Mat swt, std::vector<std::vector<cv:
         cp.rectCenter = cv::Point(((float)cp.rect.x + (float)cp.rect.width)/2, ((float)cp.rect.y + (float)cp.rect.height)/2);
         cp.averageDistanceFromCenter = sqrt((float)cp.rect.width/2 * (float)cp.rect.width/2 + (float)cp.rect.height/2 * (float)cp.rect.height/2);
 
-//        std::cout << variance << ", " << 0.5 * mean << "\n";
-//        if (variance > 0.5 * mean)
-//            continue;
-
-        if(rect.width < 4 || rect.height < 8)
-            continue;
-
-        if(rect.width / rect.height > 10 || rect.height / rect.width > 10)
-            continue;
-
         float diameter = sqrt(rect.width * rect.width + rect.height * rect.height);
-        if(diameter / median > 20)
+        if(verbose){
+            std::cout << "\t" << "Median: " << median << std::endl;
+            std::cout << "\t" << "Mean: " << mean << std::endl;
+            std::cout << "\t" << "Diameter: " << sqrt(rect.width * rect.width + rect.height * rect.height) << std::endl;
+            std::cout << std::endl;
+
+            std::cout << "\t" << "Width: " << rect.width << " Cutoff: " << widthThresh << std::endl;
+            std::cout << "\t" << "Height: " << rect.height << " Cutoff: " << heightThresh << std::endl;
+            std::cout << std::endl;
+
+            std::cout << "\t" << "Width height ratio: " << rect.width / rect.height << std::endl;
+            std::cout << "\t" << "Height width ratio: " << rect.height / rect.width << std::endl;
+            std::cout << "\t" << "Ration used: " <<  std::max(rect.width / rect.height, rect.height / rect.width) << " Cutoff: " << heightWidthRatioThresh << std::endl;
+            std::cout << std::endl;
+
+            std::cout << "\t" << "Diameter over median: " << diameter / median << " Cutoff: " << diameterMedianRatioThresh << std::endl;
+            std::cout << std::endl << std::endl;
+        }
+        if(rect.width < widthThresh || rect.height < heightThresh)
+            continue;
+
+        if(std::max(rect.width / rect.height, rect.height / rect.width) > heightWidthRatioThresh)
+            continue;
+
+        if(diameter / median > diameterMedianRatioThresh)
             continue;
 
         validComponents.push_back(cp);
@@ -347,8 +360,8 @@ std::vector<Component> filterComponents(cv::Mat swt, std::vector<std::vector<cv:
 }
 
 std::vector<std::vector<Component> > chain(cv::Mat swt, std::vector<Component> &components2, cv::Mat frame){
-    float colorThresh = 100;
-    float strokeThresh = PI/2;
+    float colorThresh = 50;
+    float strokeThresh = PI;
     float widthThresh = 2.5;
     float heightThresh = 1.5;
     float distanceThresh = 3;
@@ -376,14 +389,17 @@ std::vector<std::vector<Component> > chain(cv::Mat swt, std::vector<Component> &
                 continue;
 
             cv::Mat roi2 = frame(cp2.rect);
-
             cv::Scalar colorMean2 = cv::mean(roi2);
-//            std::cout << colorMean2 << "\n";
-//            std::cout << abs(colorMean[0] - colorMean2[0]) << ", ";
-//            std::cout << abs(colorMean[1] - colorMean2[1]) << ", ";
-//            std::cout << abs(colorMean[2] - colorMean2[2]) << std::endl;
-            if( abs(colorMean[0] - colorMean2[0]) > colorThresh ||
-                abs(colorMean[1] - colorMean2[1]) > colorThresh ||
+
+            if(verbose){
+                std::cout << "\t" << colorMean << ", " << colorMean2 << "\n";
+                std::cout << "\t" <<    abs(colorMean[0] - colorMean2[0]) +
+                                        abs(colorMean[1] - colorMean2[1]) + 
+                                        abs(colorMean[2] - colorMean2[2]) << std::endl;
+                std::cout << std::endl;
+            }
+            if( abs(colorMean[0] - colorMean2[0]) +
+                abs(colorMean[1] - colorMean2[1]) + 
                 abs(colorMean[2] - colorMean2[2]) > colorThresh)
                 continue;
 
@@ -461,6 +477,7 @@ std::vector<std::vector<Component> > chain(cv::Mat swt, std::vector<Component> &
 
 void tmp(cv::Mat frame){
             long int start = ms();
+            long int bigBang = ms();
 
             cv::Mat edges, gray, gaussian;
             cv::Mat grad_x, grad_y, angles;
@@ -526,6 +543,7 @@ void tmp(cv::Mat frame){
             }
 
 
+            std::cout << "Total time: " << ms() - bigBang << " ms" << "\n";
             cv::imshow("IMG", frame);
             cv::imshow("GA", gaussian);
             cv::imshow("Edges", edges);
@@ -569,6 +587,7 @@ int main(int argc, char** argv){
                 break;
 
             tmp(frame);
+            return 0;
 //            cv::resize(frame, frame, cv::Size(640, 480));
         }
     }

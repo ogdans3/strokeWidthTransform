@@ -14,6 +14,7 @@
 
 #define PI 3.14159265
 bool verbose = false;
+bool blac_on_white = false;
 
 long int ms(){
     std::chrono::seconds sec(1);
@@ -98,8 +99,13 @@ std::vector<Point> swt(cv::Mat edges, cv::Mat grad_x, cv::Mat grad_y){
                 float gradient_y = grad_y.at<float>(row, col);
 //                std::cout << row << ", " << col << "  :  " << gradient_x << ", " << gradient_y << "\n";
                 float mag = sqrt((gradient_x * gradient_x) + (gradient_y * gradient_y));
-                gradient_x = -gradient_x/mag;
-                gradient_y = -gradient_y/mag;
+                if(blac_on_white){
+                    gradient_x = -gradient_x/mag;
+                    gradient_y = -gradient_y/mag;
+                }else{
+                    gradient_x = gradient_x/mag;
+                    gradient_y = gradient_y/mag;                    
+                }
                 while(true){
                     position.x += distance * gradient_x;
                     position.y += distance * gradient_y;
@@ -128,12 +134,18 @@ std::vector<Point> swt(cv::Mat edges, cv::Mat grad_x, cv::Mat grad_y){
                             // normalize gradient
                             float c_mag = sqrt((c_gradient_x * c_gradient_x) + (c_gradient_y * c_gradient_y));
 //                            std::cout << "C: " << c_gradient_x << ", " << c_gradient_y << ", " << c_mag << "   :::::::  " << candidate.x << ", " << candidate.y << "\n";
-                            c_gradient_x = -c_gradient_x/c_mag;
-                            c_gradient_y = -c_gradient_y/c_mag;
+                            if(blac_on_white){
+                                c_gradient_x = -c_gradient_x/c_mag;
+                                c_gradient_y = -c_gradient_y/c_mag;
+                            }else{
+                                c_gradient_x = c_gradient_x/c_mag;
+                                c_gradient_y = c_gradient_y/c_mag;                    
+                            }
+
 
 //                            std::cout << "C2: " << c_gradient_x << ", " << c_gradient_y << "  :  " << gradient_x << ", " << gradient_y << "     : " << acos(gradient_x * -c_gradient_x + gradient_y * -c_gradient_y) << ", " << PI/2 << ", " << (acos(gradient_x * -c_gradient_x + gradient_y * -c_gradient_y) == PI/2) << "\n";
                             //Calculate whether the new gradient is approximately opposite to the old gradient.
-                            if (acos(gradient_x * -c_gradient_x + gradient_y * -c_gradient_y) < PI/2.0 ){
+                            if (acos(gradient_x * -c_gradient_x + gradient_y * -c_gradient_y) < PI/2 ){
                                 float length = sqrt((float)((candidate.x - p.x) * (candidate.x - p.x) + (candidate.y - p.y) * (candidate.y - p.y)));
                                 for(int i = 0; i < ray.size(); i++) {
                                     ray[i].length = length;
